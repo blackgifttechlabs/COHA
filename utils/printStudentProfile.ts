@@ -61,7 +61,7 @@ export const printStudentProfile = async (student: Student) => {
   doc.setFontSize(9);
   doc.setTextColor(100, 100, 100);
   doc.setFont("helvetica", "normal");
-  doc.text(`Grade: ${student.grade}   |   Student ID: ${student.id.substring(0, 8)}   |   Enrolled: ${student.enrolledAt?.toDate ? student.enrolledAt.toDate().toLocaleDateString() : 'N/A'}`, 18, 57);
+  doc.text(`Grade: ${student.grade || '-'}   |   Student ID: ${student.id.substring(0, 8)}   |   Enrolled: ${student.enrolledAt?.toDate ? student.enrolledAt.toDate().toLocaleDateString() : 'N/A'}`, 18, 57);
 
   let currentY = 66;
 
@@ -84,10 +84,10 @@ export const printStudentProfile = async (student: Student) => {
       startY: currentY,
       head: [[{ content: 'LEARNER INFORMATION', colSpan: 4, styles: { halign: 'left' } }]],
       body: [
-          ['Full Name', student.name, 'Date of Birth', student.dob || '-'],
-          ['Gender', student.gender, 'Citizenship', student.citizenship || '-'],
+          ['Full Name', student.name || '-', 'Date of Birth', student.dob || '-'],
+          ['Gender', student.gender || '-', 'Citizenship', student.citizenship || '-'],
           ['Address', { content: student.address || '-', colSpan: 3 }],
-          ['Special Needs', student.isSpecialNeeds ? `Yes (${student.specialNeedsType})` : 'No', 'Parent PIN', student.parentPin || '****']
+          ['Special Needs', student.isSpecialNeeds ? `Yes (${student.specialNeedsType || '-'})` : 'No', 'Parent PIN', student.parentPin || '****']
       ],
       ...tableStyles,
       columnStyles: { 
@@ -126,7 +126,7 @@ export const printStudentProfile = async (student: Student) => {
           ['Emergency Contact', student.emergencyName || '-', 'Relation', student.emergencyRelationship || '-'],
           ['Emergency Number', student.emergencyCell || '-', 'Work Contact', student.emergencyWork || '-'],
           ['Medical Conditions', { content: student.medicalConditions || 'None', colSpan: 3 }],
-          ['Doctor', student.doctorName || '-', 'Medical Aid', student.hasMedicalAid ? student.medicalAidName : 'None'],
+          ['Doctor', student.doctorName || '-', 'Medical Aid', student.hasMedicalAid ? (student.medicalAidName || '-') : 'None'],
           ['Medical Consent', { content: student.medicalConsent ? 'Consent GIVEN for emergency treatment' : 'Consent NOT GIVEN', colSpan: 3, styles: { textColor: student.medicalConsent ? [0, 100, 0] : [200, 0, 0], fontStyle: 'bold' } }]
       ],
       ...tableStyles,
@@ -147,7 +147,7 @@ export const printStudentProfile = async (student: Student) => {
         ['Previous School', student.previousSchool || 'None'],
         ['Highest Grade', student.highestGrade || 'N/A'],
         ['English Proficiency', student.langEnglish || '-'],
-        ['Other Languages', student.langOther1Name ? `${student.langOther1Name} (${student.langOther1Rating})` : '-']
+        ['Other Languages', student.langOther1Name ? `${student.langOther1Name} (${student.langOther1Rating || '-'})` : '-']
     ],
     ...tableStyles,
     columnStyles: { 
@@ -161,5 +161,5 @@ export const printStudentProfile = async (student: Student) => {
   doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 285);
   doc.text("Page 1 of 1", pageWidth - 14, 285, { align: "right" });
 
-  doc.save(`${student.surname}_${student.firstName}_Profile.pdf`);
+  doc.save(`${student.surname || 'Student'}_${student.firstName || 'Profile'}_Profile.pdf`);
 };

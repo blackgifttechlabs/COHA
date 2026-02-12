@@ -18,8 +18,7 @@ const fetchImage = async (url: string): Promise<string> => {
 
 export const printStudentList = async (students: Student[], settings: SystemSettings | null) => {
   const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.getWidth();
-
+  
   // Calculate Total Expected Fees per student based on settings
   let totalFees = 0;
   if (settings && settings.fees) {
@@ -50,10 +49,11 @@ export const printStudentList = async (students: Student[], settings: SystemSett
   doc.text(`Date: ${new Date().toLocaleDateString()}`, 40, 29);
 
   // --- Table ---
+  // Ensure all values are strings to satisfy TypeScript/jspdf-autotable
   const tableData = students.map(s => [
-      s.surname,
-      s.firstName,
-      s.grade,
+      s.surname || '',
+      s.firstName || '',
+      s.grade || '',
       s.parentName || 'N/A',
       s.fatherPhone || s.motherPhone || 'N/A',
       `N$ 0.00`, // Paid (Mocked)
