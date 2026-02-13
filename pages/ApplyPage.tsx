@@ -41,7 +41,7 @@ export const ApplyPage: React.FC = () => {
     surname: '', firstName: '', dob: '', citizenship: '', gender: 'Male', 
     address: '', region: '', grade: '', isSpecialNeeds: false, specialNeedsType: '',
     fatherName: '', fatherPhone: '', fatherEmail: '',
-    motherName: '', motherPhone: '',
+    motherName: '', motherPhone: '', motherEmail: '',
     emergencyName: '', emergencyRelationship: '', emergencyWork: '', emergencyCell: '', emergencyEmail: '',
     hasPreviousSchool: true, previousSchool: '', highestGrade: '',
     langEnglish: 'Good', 
@@ -288,6 +288,7 @@ export const ApplyPage: React.FC = () => {
                 <div className="w-full h-px bg-gray-200 my-8"></div>
                 <FormInput name="motherName" label="Mother/Guardian Name" value={formData.motherName} onChange={handleChange} />
                 <FormInput name="motherPhone" label="Phone Number" type="tel" value={formData.motherPhone} onChange={handleChange} />
+                <FormInput name="motherEmail" label="Email Address" type="email" value={formData.motherEmail} onChange={handleChange} />
             </div>
             <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-6 lg:mt-0 mt-8">Emergency Contact</h3>

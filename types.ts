@@ -79,6 +79,7 @@ export interface Application {
   fatherEmail: string;
   motherName: string;
   motherPhone: string;
+  motherEmail?: string;
 
   // Emergency Contact
   emergencyName: string;
@@ -117,6 +118,7 @@ export interface Application {
 
   // Consents
   medicalConsent: boolean;
+  agreed: boolean;
   
   // Office Use
   officeReviewDate?: string;
