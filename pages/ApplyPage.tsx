@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { submitApplication, getSystemSettings } from '../services/dataService';
+import { submitApplication, getSystemSettings, determineSpecialNeedsLevel } from '../services/dataService';
 import { ArrowLeft, CheckCircle, ArrowRight, Check, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { CustomSelect } from '../components/ui/CustomSelect';
@@ -32,6 +32,7 @@ export const ApplyPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [gradesList, setGradesList] = useState<string[]>([]);
+  const [autoLevel, setAutoLevel] = useState<string>('');
   
   // Validation State
   const [shakeError, setShakeError] = useState(false);
@@ -63,11 +64,19 @@ export const ApplyPage: React.FC = () => {
         if (settings && settings.grades) {
             setGradesList(settings.grades);
         } else {
-            setGradesList(['Grade 1', 'Grade 2', 'Grade 3']);
+            setGradesList(['Grade 0', 'Grade 1', 'Grade 2', 'Grade 3']);
         }
     };
     fetchGrades();
   }, []);
+
+  // Recalculate level when DOB or Special Needs changes
+  useEffect(() => {
+    if (formData.isSpecialNeeds && formData.dob) {
+        const lvl = determineSpecialNeedsLevel(formData.dob);
+        setAutoLevel(lvl);
+    }
+  }, [formData.dob, formData.isSpecialNeeds]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -109,9 +118,7 @@ export const ApplyPage: React.FC = () => {
     if (!formData.medicalConsent || !formData.agreed) {
       setShakeError(true);
       setErrorField('consent');
-      setTimeout(() => setShakeError(false), 600); // Remove animation class after plays
-      
-      // Highlight the error section (Pulse effect via css class below)
+      setTimeout(() => setShakeError(false), 600); 
       return;
     }
 
@@ -231,18 +238,8 @@ export const ApplyPage: React.FC = () => {
 
             {/* Right Col */}
             <div>
-                <CustomSelect 
-                  label="Grade Applying For"
-                  value={formData.grade}
-                  options={gradesList.map(g => ({ label: g, value: g }))}
-                  onChange={(val) => handleCustomSelect('grade', val)}
-                  required
-                />
-
-                <FormInput name="address" label="Residential Address" value={formData.address} onChange={handleChange} required />
-
-                <div className="mt-6 mb-6">
-                  <label className="flex items-start gap-3 cursor-pointer p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="mb-6">
+                  <label className="flex items-start gap-3 cursor-pointer p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-coha-300 transition-colors">
                     <input 
                       type="checkbox" 
                       name="isSpecialNeeds" 
@@ -251,32 +248,53 @@ export const ApplyPage: React.FC = () => {
                       className="mt-1 w-5 h-5 accent-coha-500"
                     />
                     <div>
-                      <span className="font-bold text-gray-800 text-sm">Special Needs Application</span>
-                      <p className="text-xs text-gray-500 mt-1">Check this if the learner requires special educational support.</p>
+                      <span className="font-bold text-gray-800 text-sm">Special Needs Division</span>
+                      <p className="text-xs text-gray-500 mt-1">Select this if the learner requires Special Needs education. The system will automatically assign a level based on age.</p>
                     </div>
                   </label>
                 </div>
 
-                {formData.isSpecialNeeds && (
-                  <div className="animate-fade-in pl-4 border-l-2 border-coha-500 mb-6">
-                    <CustomSelect 
-                      label="Type of Special Needs"
-                      value={formData.specialNeedsType}
-                      options={[
-                        { label: 'Intellectual/Learning Difficulties', value: 'Intellectual/Learning Difficulties' },
-                        { label: 'Down Syndrome', value: 'Down Syndrome' },
-                        { label: 'Autism', value: 'Autism' },
-                        { label: 'Other', value: 'Other' }
-                      ]}
-                      onChange={(val) => handleCustomSelect('specialNeedsType', val)}
-                    />
+                {formData.isSpecialNeeds ? (
+                  <div className="animate-fade-in p-4 bg-blue-50 border-l-4 border-blue-500 mb-6">
+                    <h4 className="font-bold text-blue-900 mb-2">Automated Level Assignment</h4>
+                    {formData.dob ? (
+                         <p className="text-sm text-blue-800">Based on the date of birth, the learner will be placed in: <span className="font-bold text-lg block mt-1">{autoLevel}</span></p>
+                    ) : (
+                         <p className="text-sm text-blue-600 italic">Please enter Date of Birth to see the assigned level.</p>
+                    )}
+                    
+                    <div className="mt-4">
+                        <CustomSelect 
+                        label="Type of Special Needs"
+                        value={formData.specialNeedsType}
+                        options={[
+                            { label: 'Intellectual/Learning Difficulties', value: 'Intellectual/Learning Difficulties' },
+                            { label: 'Down Syndrome', value: 'Down Syndrome' },
+                            { label: 'Autism', value: 'Autism' },
+                            { label: 'Other', value: 'Other' }
+                        ]}
+                        onChange={(val) => handleCustomSelect('specialNeedsType', val)}
+                        />
+                    </div>
                   </div>
+                ) : (
+                    <div className="animate-fade-in">
+                        <CustomSelect 
+                        label="Mainstream Grade"
+                        value={formData.grade}
+                        options={gradesList.map(g => ({ label: g, value: g }))}
+                        onChange={(val) => handleCustomSelect('grade', val)}
+                        required
+                        />
+                    </div>
                 )}
+
+                <FormInput name="address" label="Residential Address" value={formData.address} onChange={handleChange} required />
             </div>
           </div>
         )}
 
-        {/* ... (Other steps remain same but shortened for XML space, they just use FormInput which is locally defined still) ... */}
+        {/* ... (Steps 2-5 are identical to previous version) ... */}
         {/* Step 2: Parents */}
         {currentStep === 1 && (
           <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8">

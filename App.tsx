@@ -13,6 +13,10 @@ import { ApplicationsPage } from './pages/admin/Applications';
 import { ApplicationDetailsPage } from './pages/admin/ApplicationDetails';
 import { SettingsPage } from './pages/admin/Settings';
 import { ParentDashboard } from './pages/parent/Dashboard';
+import { ParentAssessmentForm } from './pages/parent/AssessmentForm';
+import { ParentAssessmentProgress } from './pages/parent/AssessmentProgress';
+import { TeacherDashboard } from './pages/teacher/Dashboard';
+import { AssessmentPage } from './pages/teacher/AssessmentPage';
 import { UserRole } from './types';
 import { seedAdminUser, getAdminProfile } from './services/dataService';
 import { Toast } from './components/ui/Toast';
@@ -40,7 +44,7 @@ const AppLayout: React.FC<{
           role={role}
           userName={user?.name}
         />
-        <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+        <main className="flex-1 p-5 overflow-y-auto">
           {children}
         </main>
       </div>
@@ -118,6 +122,7 @@ const App: React.FC = () => {
                   <Route path="teachers" element={<TeachersPage />} />
                   <Route path="students" element={<StudentsPage />} />
                   <Route path="students/:id" element={<StudentDetailsPage />} />
+                  <Route path="assessment/:id" element={<AssessmentPage userRole={UserRole.ADMIN} user={user} />} />
                   <Route path="settings" element={<SettingsPage />} />
                   <Route path="*" element={<Navigate to="dashboard" />} />
                 </Routes>
@@ -125,11 +130,16 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-          {/* Teacher Routes - Placeholders */}
+          {/* Teacher Routes */}
           <Route path="/teacher/*" element={
             <ProtectedRoute isAuthenticated={!!user} userRole={role} allowedRoles={[UserRole.TEACHER]}>
               <AppLayout role={UserRole.TEACHER} user={user} onLogout={handleLogout}>
-                <div className="p-8 text-center text-gray-500">Teacher Dashboard Content Here</div>
+                <Routes>
+                    <Route path="dashboard" element={<TeacherDashboard user={user} />} />
+                    <Route path="classes" element={<TeacherDashboard user={user} />} />
+                    <Route path="assessment/:id" element={<AssessmentPage userRole={UserRole.TEACHER} user={user} />} />
+                    <Route path="*" element={<Navigate to="dashboard" />} />
+                </Routes>
               </AppLayout>
             </ProtectedRoute>
           } />
@@ -140,6 +150,8 @@ const App: React.FC = () => {
                <AppLayout role={UserRole.PARENT} user={user} onLogout={handleLogout}>
                   <Routes>
                       <Route path="dashboard" element={<ParentDashboard user={user} />} />
+                      <Route path="assessment-form" element={<ParentAssessmentForm user={user} />} />
+                      <Route path="assessment" element={<ParentAssessmentProgress user={user} />} />
                       <Route path="*" element={<Navigate to="dashboard" />} />
                   </Routes>
               </AppLayout>

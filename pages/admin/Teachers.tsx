@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { addTeacher, getTeachers, deleteTeacher, updateTeacher } from '../../services/dataService';
-import { Teacher } from '../../types';
+import { CustomSelect } from '../../components/ui/CustomSelect';
+import { addTeacher, getTeachers, deleteTeacher, updateTeacher, getSystemSettings } from '../../services/dataService';
+import { Teacher, SystemSettings } from '../../types';
 import { Plus, Search, Trash2, Edit2 } from 'lucide-react';
 import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
@@ -10,10 +11,12 @@ export const TeachersPage: React.FC = () => {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
   
   // Form State
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
+  const [assignedClass, setAssignedClass] = useState('');
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -21,18 +24,21 @@ export const TeachersPage: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null);
 
-  const fetchTeachers = async () => {
+  const fetchData = async () => {
     const data = await getTeachers();
+    const settingsData = await getSystemSettings();
     setTeachers(data);
+    setSettings(settingsData);
   };
 
   useEffect(() => {
-    fetchTeachers();
+    fetchData();
   }, []);
 
   const handleEdit = (teacher: Teacher) => {
     setName(teacher.name);
     setSubject(teacher.subject || '');
+    setAssignedClass(teacher.assignedClass || '');
     setEditingId(teacher.id);
     setShowForm(true);
   };
@@ -41,6 +47,7 @@ export const TeachersPage: React.FC = () => {
     setShowForm(false);
     setName('');
     setSubject('');
+    setAssignedClass('');
     setEditingId(null);
   };
 
@@ -50,14 +57,14 @@ export const TeachersPage: React.FC = () => {
     
     let success = false;
     if (editingId) {
-        success = await updateTeacher(editingId, { name, subject });
+        success = await updateTeacher(editingId, { name, subject, assignedClass });
     } else {
-        success = await addTeacher(name, subject);
+        success = await addTeacher(name, subject, assignedClass);
     }
 
     if (success) {
       handleFormClose();
-      fetchTeachers();
+      fetchData();
     }
     setLoading(false);
   };
@@ -74,7 +81,7 @@ export const TeachersPage: React.FC = () => {
         if (success) {
             setDeleteModalOpen(false);
             setTeacherToDelete(null);
-            fetchTeachers();
+            fetchData();
         }
         setLoading(false);
     }
@@ -84,6 +91,18 @@ export const TeachersPage: React.FC = () => {
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       (t.subject && t.subject.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+  
+  // Build Class Options from Settings
+  const getClassOptions = () => {
+      if (!settings) return [];
+      const grades = settings.grades.map(g => ({ label: g, value: g }));
+      
+      // For Special Needs, teachers might be assigned to a Level or a Stage
+      // Let's create general Level buckets for now, since stages are dynamic
+      const levels = settings.specialNeedsLevels.map(l => ({ label: `${l} (Special Needs)`, value: l }));
+      
+      return [...grades, ...levels];
+  };
 
   return (
     <div>
@@ -118,12 +137,22 @@ export const TeachersPage: React.FC = () => {
               required
             />
             <Input 
-              label="Subject" 
+              label="Subject / Role" 
               placeholder="e.g. Mathematics" 
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               required
             />
+            <div className="md:col-span-2">
+                <CustomSelect 
+                    label="Assigned Class / Division"
+                    value={assignedClass}
+                    options={getClassOptions()}
+                    onChange={setAssignedClass}
+                    placeholder="Select class..."
+                />
+            </div>
+            
             <div className="md:col-span-2 flex justify-end gap-2 mt-2">
               <Button type="button" variant="outline" onClick={handleFormClose}>Cancel</Button>
               <Button type="submit" disabled={loading}>{loading ? 'Saving...' : (editingId ? 'Update Teacher' : 'Save Teacher')}</Button>
@@ -150,7 +179,7 @@ export const TeachersPage: React.FC = () => {
               <tr>
                 <th className="px-6 py-4">Name</th>
                 <th className="px-6 py-4">Subject</th>
-                <th className="px-6 py-4">Default PIN</th>
+                <th className="px-6 py-4">Assigned Class</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -159,7 +188,9 @@ export const TeachersPage: React.FC = () => {
                 <tr key={teacher.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-bold text-coha-900">{teacher.name}</td>
                   <td className="px-6 py-4">{teacher.subject}</td>
-                  <td className="px-6 py-4 font-mono text-gray-500">1234</td>
+                  <td className="px-6 py-4">
+                      {teacher.assignedClass ? <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 font-bold rounded">{teacher.assignedClass}</span> : <span className="text-gray-400 italic">Unassigned</span>}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
                         <button onClick={() => handleEdit(teacher)} className="text-coha-500 hover:text-coha-700 p-1">

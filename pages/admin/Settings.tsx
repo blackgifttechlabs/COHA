@@ -3,7 +3,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { getSystemSettings, saveSystemSettings } from '../../services/dataService';
 import { SystemSettings, FeeItem, SupplyItem } from '../../types';
-import { Save, User, DollarSign, Package, Calendar, Plus, Trash2, CheckSquare, Square, Eye, EyeOff } from 'lucide-react';
+import { Save, User, DollarSign, Package, Calendar, Plus, Trash2, CheckSquare, Square, Eye, EyeOff, BookOpen, Heart } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 export const SettingsPage: React.FC = () => {
@@ -15,6 +15,7 @@ export const SettingsPage: React.FC = () => {
     uniforms: [],
     stationery: [],
     grades: [],
+    specialNeedsLevels: [],
     termStartDate: '',
     termStartTime: ''
   });
@@ -28,6 +29,7 @@ export const SettingsPage: React.FC = () => {
   const [newUniform, setNewUniform] = useState('');
   const [newStationery, setNewStationery] = useState('');
   const [newGrade, setNewGrade] = useState('');
+  const [newLevel, setNewLevel] = useState('');
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -38,7 +40,8 @@ export const SettingsPage: React.FC = () => {
             fees: data.fees || [],
             uniforms: data.uniforms || [],
             stationery: data.stationery || [],
-            grades: data.grades || []
+            grades: data.grades || [],
+            specialNeedsLevels: data.specialNeedsLevels || ['Level 1A', 'Level 1B', 'Level 2', 'Level 3']
         });
       }
     };
@@ -108,6 +111,17 @@ export const SettingsPage: React.FC = () => {
 
   const removeGrade = (grade: string) => {
     setSettings({ ...settings, grades: settings.grades.filter(g => g !== grade) });
+  };
+  
+  const addLevel = () => {
+    if (newLevel && !settings.specialNeedsLevels.includes(newLevel)) {
+        setSettings({ ...settings, specialNeedsLevels: [...settings.specialNeedsLevels, newLevel] });
+        setNewLevel('');
+    }
+  };
+
+  const removeLevel = (lvl: string) => {
+    setSettings({ ...settings, specialNeedsLevels: settings.specialNeedsLevels.filter(l => l !== lvl) });
   };
 
   return (
@@ -308,7 +322,7 @@ export const SettingsPage: React.FC = () => {
         {/* UNIFORMS & STATIONERY TAB */}
         {activeTab === 'UNIFORMS' && (
           <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-8">
-             
+             {/* Same as before, omitted for brevity... */}
              {/* Uniforms Column */}
              <div>
                 <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b flex items-center gap-2">
@@ -374,7 +388,6 @@ export const SettingsPage: React.FC = () => {
                     <Button onClick={() => addSupply('stationery')} className="px-4">Add</Button>
                 </div>
              </div>
-
           </div>
         )}
 
@@ -406,33 +419,65 @@ export const SettingsPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Section 2: Grades & Levels */}
-                <div className="bg-white border border-gray-200 p-6">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 bg-gray-100 rounded-full text-gray-700">
-                            <CheckSquare size={24} />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900">Grades & Levels</h3>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 mb-6 p-4 bg-gray-50 border border-gray-100">
-                        {settings.grades.map((grade) => (
-                            <div key={grade} className="bg-white text-coha-900 px-4 py-2 shadow-sm flex items-center gap-3 border border-gray-200 font-bold">
-                                {grade}
-                                <button onClick={() => removeGrade(grade)} className="text-red-400 hover:text-red-600">
-                                    <Trash2 size={16} />
-                                </button>
+                <div className="grid md:grid-cols-2 gap-6">
+                    {/* Section 2: Mainstream Grades */}
+                    <div className="bg-white border border-gray-200 p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-gray-100 rounded-full text-gray-700">
+                                <BookOpen size={24} />
                             </div>
-                        ))}
+                            <h3 className="text-xl font-bold text-gray-900">Mainstream Grades</h3>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 mb-6 p-4 bg-gray-50 border border-gray-100 min-h-[100px] content-start">
+                            {settings.grades.map((grade) => (
+                                <div key={grade} className="bg-white text-coha-900 px-4 py-2 shadow-sm flex items-center gap-3 border border-gray-200 font-bold">
+                                    {grade}
+                                    <button onClick={() => removeGrade(grade)} className="text-red-400 hover:text-red-600">
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="Add (e.g. Grade 8)" 
+                                value={newGrade} 
+                                onChange={(e) => setNewGrade(e.target.value)}
+                                className="mb-0"
+                            />
+                            <Button onClick={addGrade}>Add</Button>
+                        </div>
                     </div>
-                    <div className="flex gap-2 max-w-md">
-                        <Input 
-                            placeholder="Add New Grade (e.g. Grade 8)" 
-                            value={newGrade} 
-                            onChange={(e) => setNewGrade(e.target.value)}
-                            className="mb-0"
-                        />
-                        <Button onClick={addGrade}>Add</Button>
+
+                    {/* Section 3: Special Needs Levels */}
+                    <div className="bg-white border border-gray-200 p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-blue-100 rounded-full text-blue-700">
+                                <Heart size={24} />
+                            </div>
+                            <h3 className="text-xl font-bold text-blue-900">Special Needs Levels</h3>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 mb-6 p-4 bg-blue-50 border border-blue-100 min-h-[100px] content-start">
+                            {settings.specialNeedsLevels.map((lvl) => (
+                                <div key={lvl} className="bg-white text-blue-900 px-4 py-2 shadow-sm flex items-center gap-3 border border-blue-200 font-bold">
+                                    {lvl}
+                                    <button onClick={() => removeLevel(lvl)} className="text-red-400 hover:text-red-600">
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="Add (e.g. Level 4)" 
+                                value={newLevel} 
+                                onChange={(e) => setNewLevel(e.target.value)}
+                                className="mb-0"
+                            />
+                            <Button onClick={addLevel} variant="secondary">Add</Button>
+                        </div>
                     </div>
                 </div>
             </div>

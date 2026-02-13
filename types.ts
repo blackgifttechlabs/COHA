@@ -6,6 +6,11 @@ export enum UserRole {
   PARENT = 'PARENT'
 }
 
+export enum Division {
+  MAINSTREAM = 'Mainstream',
+  SPECIAL_NEEDS = 'Special Needs'
+}
+
 export interface User {
   id: string;
   name: string;
@@ -16,6 +21,7 @@ export interface User {
 export interface Teacher extends User {
   subject?: string;
   email?: string;
+  assignedClass?: string;
 }
 
 export interface MenuItem {
@@ -27,7 +33,7 @@ export interface MenuItem {
 export interface FeeItem {
   id: string;
   category: string;
-  amount: string; // Stored as string to handle decimals, but input is number
+  amount: string; 
   frequency: string;
   notes?: string;
 }
@@ -43,23 +49,82 @@ export interface SystemSettings {
   adminName: string;
   adminPin: string;
   
-  // Structured Data
   fees: FeeItem[];
   uniforms: SupplyItem[];
   stationery: SupplyItem[];
   grades: string[];
+  specialNeedsLevels: string[];
   
   termStartDate: string;
   termStartTime: string;
   
-  // Counters
   lastStudentId?: number; 
+}
+
+// Assessment Specific Types
+
+export type AssessmentResponse = 'Yes' | 'No' | 'Yes with help';
+
+export interface SelfCareAssessment {
+  s1: AssessmentResponse; // drink from a cup
+  s2: AssessmentResponse; // feed self with a spoon
+  s3: AssessmentResponse; // wash hands
+  s4: AssessmentResponse; // wash and dry him
+  s5: AssessmentResponse; // dress and undress him
+  s6: AssessmentResponse; // brush teeth and hair by him
+  s7: AssessmentResponse; // go to the toilet by himself
+  s8: AssessmentResponse; // assist with simple tasks around the home
+  s9: AssessmentResponse; // can be send around with messages
+  comments?: string;
+  completedDate: string;
+  calculatedScore: number; // Out of 5
+}
+
+export interface ABCLog {
+  id: string;
+  antecedent: string;
+  behaviour: string;
+  consequence: string;
+  isPositive: boolean;
+  time: string;
+}
+
+export interface AssessmentDay {
+  date?: string;
+  completed: boolean;
+  // Form 1: Main Assessment (5 areas, score /5 each)
+  scores: {
+    numbers: number;
+    reading: number;
+    selfCare: number;
+    behaviour: number;
+    senses: number;
+  };
+  // Form 2: Learn To Think (Specific task for the day)
+  thinkingTask?: {
+    taskId: string; // T1, T2 etc
+    description: string;
+    response: AssessmentResponse;
+  };
+  thinkingScore: number; // Converted from response to /5
+  // Form 3: ABC Behaviour (Positive/Negative -> /5)
+  abcScore: number;
+  abcLogs?: ABCLog[];
+}
+
+export interface AssessmentData {
+  parentSelfCare?: SelfCareAssessment;
+  teacherAssessments: { [day: number]: AssessmentDay }; // Days 1-14
+  finalAverage?: number;
+  stage?: 1 | 2 | 3;
+  isComplete: boolean;
+  parentSelfCareScore?: number; // Legacy/Quick access
 }
 
 export interface Application {
   id?: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  submissionDate: any; // Firestore Timestamp
+  submissionDate: any; 
   
   // Learner Details
   surname: string;
@@ -69,9 +134,13 @@ export interface Application {
   gender: 'Male' | 'Female';
   address: string;
   region: string;
-  grade: string;
-  isSpecialNeeds: boolean;
-  specialNeedsType?: string; // Slow learner, Down Syndrome, Autism, etc.
+  
+  division: Division; 
+  grade?: string; 
+  level?: string; 
+  
+  isSpecialNeeds: boolean; 
+  specialNeedsType?: string; 
   
   // Parent Details
   fatherName: string;
@@ -130,20 +199,24 @@ export interface Application {
 
 export type StudentStatus = 'WAITING_PAYMENT' | 'PAYMENT_VERIFICATION' | 'ASSESSMENT' | 'ENROLLED';
 
-// Student extends Application to allow full profile view
 export interface Student extends Partial<Application> {
   id: string;
-  name: string; // Display Name (First + Surname)
+  name: string; 
   grade: string;
+  level?: string;
+  stage?: 1 | 2 | 3;
+  assignedClass?: string;
+  
   parentPin: string;
   parentName: string;
   enrolledAt?: any;
   studentStatus: StudentStatus;
   
-  // Payment Verification
   receiptNumber?: string;
   receiptSubmissionDate?: any;
-  paymentRejected?: boolean; // New flag for parent dashboard
+  paymentRejected?: boolean;
+  
+  assessment?: AssessmentData;
 }
 
 export interface Receipt {

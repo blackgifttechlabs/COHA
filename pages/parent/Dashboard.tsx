@@ -1,142 +1,185 @@
-import React, { useState, useEffect } from 'react';
-import { Student } from '../../types';
-import { submitPaymentReceipt, getStudentById } from '../../services/dataService';
+import React, { useEffect, useState } from 'react';
+import { getStudentById, getSystemSettings, getTeacherByClass, getReceipts } from '../../services/dataService';
+import { Student, Teacher, SystemSettings } from '../../types';
 import { Loader } from '../../components/ui/Loader';
-import { Input } from '../../components/ui/Input';
-import { Button } from '../../components/ui/Button';
-import { AlertCircle, CheckCircle, Clock, FileText } from 'lucide-react';
+import { User, BookOpen, Calendar, DollarSign, CheckCircle, Clock } from 'lucide-react';
 
 interface ParentDashboardProps {
-  user: any; // Logged in user (Student record)
+  user: any;
 }
 
 export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
   const [student, setStudent] = useState<Student | null>(null);
-  const [receiptNumber, setReceiptNumber] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [teacher, setTeacher] = useState<Teacher | null>(null);
+  const [settings, setSettings] = useState<SystemSettings | null>(null);
+  const [financials, setFinancials] = useState({ totalFees: 0, paid: 0, balance: 0 });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Refresh student data to get latest status
-    if (user?.id) {
-        getStudentById(user.id).then(setStudent);
-    }
-  }, [user]);
+    const fetchData = async () => {
+      if (user?.id) {
+        const stud = await getStudentById(user.id);
+        const setts = await getSystemSettings();
+        setStudent(stud);
+        setSettings(setts);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!receiptNumber || !student) return;
-      
-      setLoading(true);
-      const success = await submitPaymentReceipt(student.id, receiptNumber);
-      if (success) {
-          setSubmitted(true);
-          // Optimistically update local state
-          setStudent({...student, studentStatus: 'PAYMENT_VERIFICATION', paymentRejected: false});
+        if (stud) {
+           // Fetch Teacher if class assigned
+           if (stud.assignedClass) {
+               const t = await getTeacherByClass(stud.assignedClass);
+               setTeacher(t);
+           }
+
+           // Calculate Fees (Simplified Logic)
+           // In a real app, this would be more complex based on months enrolled
+           if (setts && setts.fees) {
+               let monthlyFee = 0;
+               // Determine fee based on division or grade
+               const feeItem = setts.fees.find(f => f.category.includes('Tuition'));
+               if (feeItem) monthlyFee = parseFloat(feeItem.amount) || 0;
+
+               // Calculate paid from Receipts
+               // We only have the initial receipt in student record for now, 
+               // ideally we'd query receipts collection by usedByStudentId.
+               // For this demo, let's assume the initial receipt + dummy calculation
+               // Fetch all receipts to check total paid
+               const allReceipts = await getReceipts();
+               const studentReceipts = allReceipts.filter(r => r.usedByStudentId === stud.id);
+               
+               const totalPaid = studentReceipts.reduce((acc, r) => acc + parseFloat(r.amount), 0);
+               
+               // Assume 12 months for year
+               const totalYearly = monthlyFee * 12;
+               
+               setFinancials({
+                   totalFees: totalYearly,
+                   paid: totalPaid,
+                   balance: totalYearly - totalPaid
+               });
+           }
+        }
       }
       setLoading(false);
-  };
+    };
+    fetchData();
+  }, [user]);
 
-  if (!student) return <Loader />;
+  if (loading) return <Loader />;
+  if (!student) return <div className="p-8">Student not found.</div>;
 
-  // STATUS: WAITING_PAYMENT
-  if (student.studentStatus === 'WAITING_PAYMENT') {
-      return (
-          <div className="max-w-md mx-auto mt-10 animate-fade-in">
-              {/* Rejection Notice */}
-              {student.paymentRejected && (
-                  <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 shadow-sm">
-                      <div className="flex items-start gap-3">
-                          <AlertCircle className="text-red-600 shrink-0" size={24} />
-                          <div>
-                              <h3 className="text-red-800 font-bold">Payment Verification Failed</h3>
-                              <p className="text-red-700 text-sm mt-1">The receipt number you provided was invalid or already used. Please check your receipt and try again.</p>
-                          </div>
-                      </div>
-                  </div>
-              )}
+  const isEnrolled = student.studentStatus === 'ENROLLED';
+  const isAssessment = student.studentStatus === 'ASSESSMENT';
 
-              <div className="p-6 bg-white shadow-lg border-t-8 border-coha-900">
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <AlertCircle size={32} />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Complete Enrollment</h2>
-                    <p className="text-gray-600">Your application has been conditionally approved. Please confirm your application fee payment to proceed.</p>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    <Input 
-                        label="Enter Receipt Number" 
-                        placeholder="e.g. R-99382" 
-                        value={receiptNumber} 
-                        onChange={(e) => setReceiptNumber(e.target.value)} 
-                        required
-                    />
-                    <Button fullWidth disabled={loading}>
-                        {loading ? 'Submitting...' : 'Verify Payment'}
-                    </Button>
-                </form>
-              </div>
-          </div>
-      );
-  }
-
-  // STATUS: PAYMENT_VERIFICATION
-  if (student.studentStatus === 'PAYMENT_VERIFICATION') {
-      return (
-          <div className="max-w-md mx-auto mt-10 p-8 bg-white shadow-lg text-center animate-fade-in">
-               <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                  <Clock size={32} />
-               </div>
-               <h2 className="text-2xl font-bold text-gray-900 mb-2">Verifying Payment</h2>
-               <p className="text-gray-600">We have received your receipt number. The administration is currently verifying the payment. This usually takes 24 hours.</p>
-          </div>
-      );
-  }
-
-  // STATUS: ASSESSMENT
-  if (student.studentStatus === 'ASSESSMENT') {
-      return (
-          <div className="max-w-md mx-auto mt-10 p-8 bg-white shadow-lg text-center animate-fade-in">
-               <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <FileText size={32} />
-               </div>
-               <h2 className="text-2xl font-bold text-gray-900 mb-2">Pending Assessment</h2>
-               <p className="text-gray-600">Payment verified! The student is now awaiting academic assessment. You will be contacted shortly.</p>
-          </div>
-      );
-  }
-
-  // STATUS: ENROLLED (Standard View)
   return (
-      <div className="max-w-4xl mx-auto">
-          <div className="bg-white p-6 shadow-sm border-l-4 border-green-500 mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Welcome, {student.parentName}</h2>
-              <p className="text-gray-600">Student: {student.name} ({student.grade})</p>
+    <div className="max-w-6xl mx-auto space-y-6">
+      
+      {/* Header / Welcome */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 shadow-sm border-l-8 border-coha-900">
+        <div>
+           <h2 className="text-2xl font-bold text-gray-900">Welcome, {student.parentName}</h2>
+           <p className="text-gray-600">Parent Dashboard for <span className="font-bold text-coha-900">{student.name}</span></p>
+        </div>
+        <div className="flex items-center gap-2">
+            <span className={`px-4 py-2 rounded-full text-sm font-bold uppercase flex items-center gap-2 border
+                ${isEnrolled ? 'bg-green-100 text-green-700 border-green-200' : 'bg-purple-100 text-purple-700 border-purple-200'}
+            `}>
+                {isEnrolled ? <CheckCircle size={18}/> : <Clock size={18}/>}
+                {student.studentStatus}
+            </span>
+        </div>
+      </div>
+
+      {/* Notification for Completed Assessment */}
+      {isEnrolled && student.assessment?.isComplete && (
+          <div className="bg-green-50 border border-green-200 p-6 rounded-lg flex items-start gap-4 animate-fade-in">
+              <div className="bg-green-100 p-3 rounded-full text-green-600 shrink-0">
+                  <CheckCircle size={24} />
+              </div>
+              <div>
+                  <h3 className="text-lg font-bold text-green-800">Assessment Complete!</h3>
+                  <p className="text-green-700 mb-2">
+                      Great news! The 14-day observation period has been successfully completed. 
+                      Based on the assessment results, your child has been placed in:
+                  </p>
+                  <div className="text-2xl font-bold text-coha-900 bg-white inline-block px-4 py-2 border border-green-200 rounded shadow-sm">
+                      {student.assignedClass}
+                  </div>
+              </div>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 shadow-sm">
-                  <h3 className="font-bold text-lg mb-4 border-b pb-2">Student Profile</h3>
-                  <div className="space-y-2">
-                      <p><span className="text-gray-500 font-bold text-xs uppercase">Full Name:</span> <br/>{student.name}</p>
-                      <p><span className="text-gray-500 font-bold text-xs uppercase">Student ID:</span> <br/>{student.id}</p>
-                      <p><span className="text-gray-500 font-bold text-xs uppercase">Grade:</span> <br/>{student.grade}</p>
-                  </div>
-              </div>
-              
-              <div className="bg-white p-6 shadow-sm">
-                  <h3 className="font-bold text-lg mb-4 border-b pb-2">Financial Status</h3>
-                  <div className="flex items-center gap-3 text-green-700 bg-green-50 p-4 rounded">
-                      <CheckCircle size={24} />
-                      <div>
-                          <p className="font-bold">Enrolled</p>
-                          <p className="text-sm">Account is active.</p>
-                      </div>
-                  </div>
-              </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1: Class Info */}
+          <div className="bg-white p-6 shadow-sm border-t-4 border-coha-500">
+             <div className="flex items-center gap-3 mb-4 text-gray-700 border-b pb-2">
+                 <BookOpen className="text-coha-500" size={20} />
+                 <h3 className="font-bold">Class Details</h3>
+             </div>
+             <div className="space-y-3">
+                 <div>
+                     <p className="text-xs text-gray-500 uppercase font-bold">Assigned Class</p>
+                     <p className="text-xl font-bold text-gray-900">{student.assignedClass || 'Pending Placement'}</p>
+                 </div>
+                 <div>
+                     <p className="text-xs text-gray-500 uppercase font-bold">Division</p>
+                     <p className="text-gray-900">{student.division}</p>
+                 </div>
+                 <div>
+                     <p className="text-xs text-gray-500 uppercase font-bold">Term</p>
+                     <p className="text-gray-900">Term 1, 2026</p>
+                 </div>
+             </div>
+          </div>
+
+          {/* Card 2: Teacher Info */}
+          <div className="bg-white p-6 shadow-sm border-t-4 border-purple-500">
+             <div className="flex items-center gap-3 mb-4 text-gray-700 border-b pb-2">
+                 <User className="text-purple-500" size={20} />
+                 <h3 className="font-bold">Class Teacher</h3>
+             </div>
+             {teacher ? (
+                 <div className="space-y-3">
+                    <div>
+                        <p className="text-xs text-gray-500 uppercase font-bold">Name</p>
+                        <p className="text-xl font-bold text-gray-900">{teacher.name}</p>
+                    </div>
+                    <div>
+                        <p className="text-xs text-gray-500 uppercase font-bold">Email</p>
+                        <p className="text-gray-900">{teacher.email || 'Not available'}</p>
+                    </div>
+                    <button className="text-sm text-purple-600 font-bold hover:underline mt-2">Send Message</button>
+                 </div>
+             ) : (
+                 <p className="text-gray-500 italic">No teacher assigned yet.</p>
+             )}
+          </div>
+
+          {/* Card 3: Financials */}
+          <div className="bg-white p-6 shadow-sm border-t-4 border-green-500">
+             <div className="flex items-center gap-3 mb-4 text-gray-700 border-b pb-2">
+                 <DollarSign className="text-green-500" size={20} />
+                 <h3 className="font-bold">Fee Status</h3>
+             </div>
+             <div className="space-y-4">
+                 <div className="flex justify-between items-center">
+                     <span className="text-gray-600">Total Fees (Year)</span>
+                     <span className="font-bold text-gray-900">N$ {financials.totalFees.toLocaleString()}</span>
+                 </div>
+                 <div className="flex justify-between items-center text-green-700">
+                     <span className="font-bold">Total Paid</span>
+                     <span className="font-bold">N$ {financials.paid.toLocaleString()}</span>
+                 </div>
+                 <div className="border-t pt-2 flex justify-between items-center">
+                     <span className="text-red-600 font-bold uppercase text-sm">Balance Due</span>
+                     <span className="font-bold text-xl text-red-600">N$ {financials.balance.toLocaleString()}</span>
+                 </div>
+                 <button className="w-full py-2 bg-coha-900 text-white text-sm font-bold hover:bg-coha-800 transition-colors">
+                     View Receipts
+                 </button>
+             </div>
           </div>
       </div>
+
+    </div>
   );
 };

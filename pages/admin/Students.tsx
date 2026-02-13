@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
-import { getStudents, getSystemSettings, getStudentsByStatus, assessStudent } from '../../services/dataService';
-import { Student, SystemSettings } from '../../types';
-import { Plus, Search, Eye, Download, CheckSquare } from 'lucide-react';
+import { getStudents, getSystemSettings, getStudentsByStatus, calculateFinalStage } from '../../services/dataService';
+import { Student, SystemSettings, Division } from '../../types';
+import { Plus, Search, Eye, Download, CheckSquare, Activity, Filter } from 'lucide-react';
 import { Toast } from '../../components/ui/Toast';
 import { printStudentList } from '../../utils/printStudentList';
 
@@ -15,6 +15,9 @@ export const StudentsPage: React.FC = () => {
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({show: false, msg: ''});
+  
+  // New Filter State
+  const [divisionFilter, setDivisionFilter] = useState<'ALL' | 'MAINSTREAM' | 'SPECIAL_NEEDS'>('ALL');
 
   const fetchStudents = async () => {
     setLoading(true);
@@ -36,18 +39,31 @@ export const StudentsPage: React.FC = () => {
     fetchStudents();
   }, [viewMode]);
 
-  const handleAssess = async (studentId: string) => {
-      if(window.confirm('Mark this student as assessed and fully enrolled?')) {
-          await assessStudent(studentId);
-          fetchStudents();
-          setToast({show: true, msg: 'Student enrolled successfully'});
+  const handleFinalizeAssessment = async (studentId: string) => {
+      // This is for Admin override or check
+      if(window.confirm('Calculate final stage and enroll student?')) {
+          setLoading(true);
+          const result = await calculateFinalStage(studentId);
+          setLoading(false);
+          if (result) {
+              setToast({show: true, msg: `Student enrolled in ${result}`});
+              fetchStudents();
+          } else {
+              setToast({show: true, msg: 'Could not calculate. Ensure assessments are present.'});
+          }
       }
   };
 
-  const filteredStudents = students.filter(student => 
-    student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (student.parentName && student.parentName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredStudents = students.filter(student => {
+    const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (student.parentName && student.parentName.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    let matchesDivision = true;
+    if (divisionFilter === 'MAINSTREAM') matchesDivision = student.division !== Division.SPECIAL_NEEDS;
+    if (divisionFilter === 'SPECIAL_NEEDS') matchesDivision = student.division === Division.SPECIAL_NEEDS;
+
+    return matchesSearch && matchesDivision;
+  });
 
   return (
     <div>
@@ -65,14 +81,16 @@ export const StudentsPage: React.FC = () => {
         )}
       </div>
 
-      <div className="flex border-b border-gray-200 mb-6 bg-white shadow-sm">
-         <button onClick={() => setViewMode('ENROLLED')} className={`px-6 py-3 font-bold text-sm uppercase border-b-4 ${viewMode === 'ENROLLED' ? 'border-coha-900 text-coha-900' : 'border-transparent text-gray-500'}`}>Registered Students</button>
-         <button onClick={() => setViewMode('ASSESSMENT')} className={`px-6 py-3 font-bold text-sm uppercase border-b-4 ${viewMode === 'ASSESSMENT' ? 'border-coha-900 text-coha-900' : 'border-transparent text-gray-500'}`}>Pending Assessment</button>
+      <div className="flex justify-between items-center border-b border-gray-200 mb-6 bg-white shadow-sm flex-wrap">
+         <div className="flex">
+            <button onClick={() => setViewMode('ENROLLED')} className={`px-6 py-3 font-bold text-sm uppercase border-b-4 ${viewMode === 'ENROLLED' ? 'border-coha-900 text-coha-900' : 'border-transparent text-gray-500'}`}>Registered Students</button>
+            <button onClick={() => setViewMode('ASSESSMENT')} className={`px-6 py-3 font-bold text-sm uppercase border-b-4 ${viewMode === 'ASSESSMENT' ? 'border-coha-900 text-coha-900' : 'border-transparent text-gray-500'}`}>Observation Period</button>
+         </div>
       </div>
 
       <div className="bg-white border border-gray-200 shadow-sm">
-        <div className="p-4 border-b border-gray-200 flex gap-2">
-          <div className="relative flex-1 max-w-md">
+        <div className="p-4 border-b border-gray-200 flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-3 text-gray-400" size={20} />
             <input 
               className="w-full pl-10 pr-4 py-2 border border-gray-300 focus:border-coha-500 outline-none rounded-none"
@@ -81,6 +99,18 @@ export const StudentsPage: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <div className="flex items-center gap-2">
+              <Filter className="text-gray-400" size={20} />
+              <select 
+                className="p-2 border border-gray-300 outline-none bg-gray-50 text-sm font-medium"
+                value={divisionFilter}
+                onChange={(e) => setDivisionFilter(e.target.value as any)}
+              >
+                  <option value="ALL">All Divisions</option>
+                  <option value="MAINSTREAM">Mainstream</option>
+                  <option value="SPECIAL_NEEDS">Special Needs</option>
+              </select>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -88,8 +118,8 @@ export const StudentsPage: React.FC = () => {
               <tr>
                 <th className="px-6 py-4">ID</th>
                 <th className="px-6 py-4">Student</th>
-                <th className="px-6 py-4">Grade</th>
-                <th className="px-6 py-4">Parent</th>
+                <th className="px-6 py-4">Division</th>
+                <th className="px-6 py-4">Class/Level</th>
                 <th className="px-6 py-4">Actions</th>
               </tr>
             </thead>
@@ -99,15 +129,24 @@ export const StudentsPage: React.FC = () => {
                   <td className="px-6 py-4 font-mono text-xs">{student.id}</td>
                   <td className="px-6 py-4 font-bold text-coha-900">{student.name}</td>
                   <td className="px-6 py-4">
-                     <span className="bg-coha-100 text-coha-800 px-2 py-1 text-xs font-bold uppercase">{student.grade}</span>
+                     <span className={`px-2 py-1 text-xs font-bold uppercase rounded ${student.division === Division.SPECIAL_NEEDS ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                         {student.division || 'Mainstream'}
+                     </span>
                   </td>
-                  <td className="px-6 py-4">{student.parentName}</td>
+                  <td className="px-6 py-4 font-medium">
+                      {student.assignedClass || student.grade || student.level}
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-2">
                         {viewMode === 'ASSESSMENT' ? (
-                            <Button onClick={() => handleAssess(student.id)} className="py-1 px-3 text-xs">
-                                <CheckSquare size={14} /> Assess & Register
-                            </Button>
+                            <>
+                                <Button onClick={() => navigate(`/admin/assessment/${student.id}`)} variant="outline" className="py-1 px-3 text-xs border-coha-500 text-coha-900">
+                                    <Eye size={14} /> View Details
+                                </Button>
+                                <Button onClick={() => handleFinalizeAssessment(student.id)} className="py-1 px-3 text-xs">
+                                    <Activity size={14} /> Finalize
+                                </Button>
+                            </>
                         ) : (
                             <button 
                             onClick={() => navigate(`/admin/students/${student.id}`)}

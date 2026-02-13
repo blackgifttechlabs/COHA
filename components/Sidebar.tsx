@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, GraduationCap, LogOut, X, FileText, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, LogOut, X, FileText, Settings, Activity, ClipboardList } from 'lucide-react';
 import { UserRole } from '../types';
 import { getPendingActionCounts } from '../services/dataService';
 
@@ -43,7 +43,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogou
   ];
 
   const parentLinks = [
-    { label: 'Student Info', path: '/parent/dashboard', icon: <Users size={20} /> },
+    { label: 'Dashboard', path: '/parent/dashboard', icon: <LayoutDashboard size={20} /> },
+    { label: 'Assessment Info', path: '/parent/assessment-form', icon: <ClipboardList size={20} /> },
+    { label: 'Assessment Progress', path: '/parent/assessment', icon: <Activity size={20} /> },
   ];
 
   let links = parentLinks;
