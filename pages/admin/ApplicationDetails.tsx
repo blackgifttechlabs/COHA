@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getApplicationById, updateApplication, getSystemSettings, enrollStudent } from '../../services/dataService';
+import { getApplicationById, updateApplication, getSystemSettings, approveApplicationInitial } from '../../services/dataService';
 import { Application, SystemSettings } from '../../types';
 import { Button } from '../../components/ui/Button';
 import { Loader } from '../../components/ui/Loader';
 import { Input } from '../../components/ui/Input';
-import { ArrowLeft, Mail, Check, X, Printer, Phone } from 'lucide-react';
+import { ArrowLeft, Check, X, Printer, AlertTriangle } from 'lucide-react';
+import { ConfirmModal } from '../../components/ui/ConfirmModal';
 
 export const ApplicationDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -13,6 +14,7 @@ export const ApplicationDetailsPage: React.FC = () => {
   const [app, setApp] = useState<Application | null>(null);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
   
   // Office Use State
   const [officeData, setOfficeData] = useState({
@@ -31,7 +33,6 @@ export const ApplicationDetailsPage: React.FC = () => {
         setApp(appData);
         setSettings(settingsData);
         
-        // Pre-fill reviewer name if available
         if (settingsData?.adminName) {
             setOfficeData(prev => ({...prev, officeReviewer: settingsData.adminName}));
         }
@@ -59,7 +60,6 @@ export const ApplicationDetailsPage: React.FC = () => {
     setIsProcessing(true);
     
     try {
-        // 1. Update Application in DB
         const updatedData = {
             status: 'APPROVED' as any,
             ...officeData
@@ -68,56 +68,29 @@ export const ApplicationDetailsPage: React.FC = () => {
         await updateApplication(id, updatedData);
         setApp({ ...app, ...updatedData });
 
-        // 2. Automatically Enroll Student
-        const parentPin = await enrollStudent(app);
+        // 1. Initial Approval -> Create Student with "WAITING_PAYMENT"
+        const result = await approveApplicationInitial(app);
 
-        // 3. Generate Email Mailto Link
-        if (settings && parentPin) {
-            const parentEmail = app.fatherEmail; // Primary email
-            const subject = `Admission Status: ${app.firstName} ${app.surname} - Circle of Hope Academy`;
+        if (settings && result) {
+            const parentEmail = app.fatherEmail; 
+            const subject = `Admission Conditional Approval: ${app.firstName} ${app.surname} - Circle of Hope Academy`;
             
-            // Format Lists
-            const feesList = settings.fees 
-                ? settings.fees.map(f => `- ${f.category}: ${f.amount} (${f.frequency})`).join('\n')
-                : 'As per schedule';
-
-            const uniformsList = settings.uniforms
-                ? settings.uniforms.map(u => `- ${u.name} ${u.isRequired ? '' : '(Optional)'}`).join('\n')
-                : 'As per schedule';
-
-            const stationeryList = settings.stationery
-                ? settings.stationery.map(s => `- ${s.name} ${s.isRequired ? '' : '(Optional)'}`).join('\n')
-                : 'As per schedule';
-
             const body = `Dear Parent/Guardian,
 
-We are pleased to inform you that the application for ${app.firstName} ${app.surname} for ${app.grade} at Circle of Hope Academy has been SUCCESSFUL.
+Your application for ${app.firstName} ${app.surname} has been CONDITIONALLY APPROVED.
 
-IMPORTANT LOGIN DETAILS:
-To access the parent portal and view your child's profile, please use the following:
+NEXT STEP: PAYMENT CONFIRMATION
+To finalize the enrollment, you must login to the Parent Portal and enter your application fee receipt number.
+
+LOGIN DETAILS:
 Student Name: ${app.firstName} ${app.surname}
-Parent PIN: ${parentPin}
+Parent PIN: ${result.pin}
 
-Here are the details for the upcoming term:
-
-START DATE: ${settings.termStartDate || 'TBA'}
-START TIME: ${settings.termStartTime || '07:30'}
-
-SCHOOL FEES STRUCTURE:
-${feesList}
-
-UNIFORM REQUIREMENTS:
-${uniformsList}
-
-STATIONERY LIST:
-${stationeryList}
-
-Please ensure all registration fees are paid before the start date.
+Please login at the school portal and verify your payment to proceed to assessment.
 
 Regards,
 ${settings.adminName}
-Circle of Hope Academy
-`;
+Circle of Hope Academy`;
             
             window.location.href = `mailto:${parentEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         }
@@ -125,6 +98,24 @@ Circle of Hope Academy
         console.error("Error approving:", error);
     }
     setIsProcessing(false);
+  };
+
+  const handleReject = async () => {
+      if (!app || !id) return;
+      setIsProcessing(true);
+      try {
+          await updateApplication(id, { status: 'REJECTED' });
+          setRejectModalOpen(false);
+          setApp({...app, status: 'REJECTED'});
+          
+          // Send Rejection Email
+          const subject = `Admission Update: ${app.firstName} ${app.surname}`;
+          const body = `Dear Parent/Guardian,\n\nWe regret to inform you that the application for ${app.firstName} ${app.surname} was not successful at this time.\n\nRegards,\nCircle of Hope Academy`;
+           window.location.href = `mailto:${app.fatherEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      } catch (e) {
+          console.error(e);
+      }
+      setIsProcessing(false);
   };
 
   if (!app) return <Loader />;
@@ -139,14 +130,23 @@ Circle of Hope Academy
   );
 
   const InfoRow: React.FC<{ label: string; value: any }> = ({ label, value }) => (
-    <div>
+    <div className="mb-2">
       <p className="text-xs text-gray-500 uppercase font-bold">{label}</p>
-      <p className="text-gray-900 font-medium break-words">{value || '-'}</p>
+      <p className={`text-gray-900 font-medium break-words ${!value ? 'text-gray-400 italic' : ''}`}>{value || 'Not provided'}</p>
     </div>
   );
 
   return (
     <div className="w-full px-5 pb-10">
+        <ConfirmModal 
+            isOpen={rejectModalOpen}
+            onClose={() => setRejectModalOpen(false)}
+            onConfirm={handleReject}
+            title="Reject Application?"
+            message="Are you sure you want to reject this application? This action will mark it as rejected."
+            isLoading={isProcessing}
+        />
+
         <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
                 <button onClick={() => navigate('/admin/applications')} className="bg-white p-2 border hover:bg-gray-50">
@@ -172,10 +172,10 @@ Circle of Hope Academy
                     <InfoRow label="Gender" value={app.gender} />
                     <InfoRow label="Citizenship" value={app.citizenship} />
                     <InfoRow label="Grade Applied" value={app.grade} />
-                    <InfoRow label="Address" value={app.address} />
+                    <InfoRow label="Residential Address" value={app.address} />
+                    <InfoRow label="Region" value={app.region} />
                     <InfoRow label="Special Needs" value={app.isSpecialNeeds ? `Yes - ${app.specialNeedsType}` : 'No'} />
                 </Section>
-
                 <Section title="Parent / Guardian Info">
                     <InfoRow label="Father Name" value={app.fatherName} />
                     <InfoRow label="Father Phone" value={app.fatherPhone} />
@@ -184,76 +184,49 @@ Circle of Hope Academy
                     <InfoRow label="Mother Name" value={app.motherName} />
                     <InfoRow label="Mother Phone" value={app.motherPhone} />
                 </Section>
-
-                <Section title="Emergency Contact" className="border-l-4 border-red-500">
-                    <InfoRow label="Contact Name" value={app.emergencyName} />
+                <Section title="Emergency Contact">
+                    <InfoRow label="Full Name" value={app.emergencyName} />
                     <InfoRow label="Relationship" value={app.emergencyRelationship} />
                     <InfoRow label="Cell Number" value={app.emergencyCell} />
                     <InfoRow label="Work Contact" value={app.emergencyWork} />
                     <InfoRow label="Email" value={app.emergencyEmail} />
                 </Section>
-
-                <Section title="Education & Languages">
-                    <InfoRow label="Previous School" value={app.hasPreviousSchool ? app.previousSchool : 'None'} />
-                    <InfoRow label="Highest Grade" value={app.hasPreviousSchool ? app.highestGrade : 'N/A'} />
-                    <div className="md:col-span-2 mt-2">
-                        <p className="text-xs text-gray-500 uppercase font-bold mb-2">Language Proficiency</p>
-                        <div className="bg-gray-50 p-2 text-sm">
-                            <div className="grid grid-cols-2 border-b border-gray-200 pb-1">
-                                <span>English</span> <span className="font-bold">{app.langEnglish}</span>
-                            </div>
-                            {app.langOther1Name && (
-                                <div className="grid grid-cols-2 border-b border-gray-200 py-1">
-                                    <span>{app.langOther1Name}</span> <span className="font-bold">{app.langOther1Rating}</span>
-                                </div>
-                            )}
-                            {app.langOther2Name && (
-                                <div className="grid grid-cols-2 pt-1">
-                                    <span>{app.langOther2Name}</span> <span className="font-bold">{app.langOther2Rating}</span>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                <Section title="Educational History">
+                    <InfoRow label="First Time Attender" value={!app.hasPreviousSchool ? 'Yes' : 'No'} />
+                    {app.hasPreviousSchool && (
+                        <>
+                            <InfoRow label="Previous School" value={app.previousSchool} />
+                            <InfoRow label="Highest Grade Completed" value={app.highestGrade} />
+                        </>
+                    )}
+                    <div className="md:col-span-2 border-t pt-2 mt-2"></div>
+                    <InfoRow label="English Proficiency" value={app.langEnglish} />
+                    <InfoRow label="Other Language 1" value={app.langOther1Name ? `${app.langOther1Name} (${app.langOther1Rating})` : null} />
+                    <InfoRow label="Other Language 2" value={app.langOther2Name ? `${app.langOther2Name} (${app.langOther2Rating})` : null} />
                 </Section>
-
                 <Section title="Medical Information">
-                     <div className="md:col-span-2">
-                        <InfoRow label="Known Conditions / Allergies" value={app.medicalConditions} />
-                    </div>
-                    
-                    <div className="md:col-span-2 border-t my-2 pt-2">
-                        <h4 className="font-bold text-gray-700 text-sm mb-2">Professionals</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <InfoRow label="Doctor" value={`${app.doctorName || 'None'} (${app.doctorContact || '-'})`} />
-                            <InfoRow label="Audiologist" value={`${app.audiologistName || 'None'} (${app.audiologistContact || '-'})`} />
-                            <InfoRow label="Therapist" value={`${app.therapistName || 'None'} (${app.therapistContact || '-'})`} />
-                        </div>
-                    </div>
-
-                    <div className="md:col-span-2 border-t my-2 pt-2">
-                         <h4 className="font-bold text-gray-700 text-sm mb-2">Medical Aid</h4>
-                         {app.hasMedicalAid ? (
-                            <div className="grid grid-cols-2 gap-4">
-                                <InfoRow label="Fund Name" value={app.medicalAidName} />
-                                <InfoRow label="Option" value={app.medicalAidOption} />
-                                <InfoRow label="Member Name" value={app.medicalAidMemberName} />
-                                <InfoRow label="Member ID" value={app.medicalAidMemberID} />
-                            </div>
-                         ) : (
-                             <p className="text-gray-500 text-sm italic">No Medical Aid</p>
-                         )}
-                    </div>
+                     <InfoRow label="Medical Conditions / Allergies" value={app.medicalConditions} />
+                     <div className="md:col-span-2 border-t pt-2 mt-2 grid md:grid-cols-2 gap-4">
+                        <InfoRow label="Family Doctor" value={app.doctorName ? `${app.doctorName} (${app.doctorContact})` : null} />
+                        <InfoRow label="Audiologist" value={app.audiologistName ? `${app.audiologistName} (${app.audiologistContact})` : null} />
+                        <InfoRow label="Occupational Therapist" value={app.therapistName ? `${app.therapistName} (${app.therapistContact})` : null} />
+                     </div>
+                     <div className="md:col-span-2 border-t pt-2 mt-2"></div>
+                     <InfoRow label="Medical Aid" value={app.hasMedicalAid ? 'Yes' : 'No'} />
+                     {app.hasMedicalAid && (
+                         <>
+                            <InfoRow label="Medical Aid Name" value={app.medicalAidName} />
+                            <InfoRow label="Plan Option" value={app.medicalAidOption} />
+                            <InfoRow label="Member Name" value={app.medicalAidMemberName} />
+                            <InfoRow label="Member ID" value={app.medicalAidMemberID} />
+                         </>
+                     )}
                 </Section>
-                
-                 <div className="bg-white p-6 shadow-sm border border-gray-200 mb-6 flex items-center gap-4">
-                     <div className={`p-2 rounded-full ${app.medicalConsent ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                         {app.medicalConsent ? <Check size={24} /> : <X size={24} />}
-                     </div>
-                     <div>
-                         <h4 className="font-bold text-coha-900">Emergency Medical Consent</h4>
-                         <p className="text-sm text-gray-600">Parent has {app.medicalConsent ? 'consented' : 'NOT consented'} to emergency medical treatment.</p>
-                     </div>
-                 </div>
+                 <Section title="Declarations">
+                    <InfoRow label="Medical Consent Given" value={app.medicalConsent ? 'Yes' : 'No'} />
+                    <InfoRow label="Terms & Conditions Accepted" value={app.agreed ? 'Yes' : 'No'} />
+                    <InfoRow label="Submission Date" value={app.submissionDate?.toDate().toLocaleString()} />
+                </Section>
             </div>
 
             <div className="lg:col-span-1">
@@ -267,63 +240,26 @@ Circle of Hope Academy
                                 <Check size={32} />
                             </div>
                             <h3 className="font-bold text-green-800 text-xl">Approved</h3>
-                            <p className="text-green-600">Student Enrolled</p>
+                            <p className="text-green-600">Awaiting Payment Verification</p>
+                        </div>
+                    ) : app.status === 'REJECTED' ? (
+                        <div className="text-center py-8">
+                             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <X size={32} />
+                            </div>
+                            <h3 className="font-bold text-red-800 text-xl">Rejected</h3>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <Input 
-                                label="Reviewed By" 
-                                name="officeReviewer"
-                                value={officeData.officeReviewer}
-                                onChange={handleOfficeChange}
-                            />
-                            <Input 
-                                label="Date of Review" 
-                                type="date" 
-                                name="officeReviewDate"
-                                value={officeData.officeReviewDate}
-                                onChange={handleOfficeChange}
-                            />
-                            <div>
-                                <label className="block text-coha-900 text-sm font-semibold mb-1 uppercase tracking-wider">Admission Status</label>
-                                <select 
-                                    name="officeStatus" 
-                                    value={officeData.officeStatus} 
-                                    onChange={handleOfficeChange}
-                                    className="w-full p-3 border-2 border-gray-300 focus:border-coha-500 outline-none bg-white rounded-none"
-                                >
-                                    <option value="Successful">Successful</option>
-                                    <option value="Not Successful">Not Successful</option>
-                                </select>
-                            </div>
+                            <Input label="Reviewed By" name="officeReviewer" value={officeData.officeReviewer} onChange={handleOfficeChange} />
+                            <Input label="Date of Review" type="date" name="officeReviewDate" value={officeData.officeReviewDate} onChange={handleOfficeChange} />
                             
-                            <div className="pt-4 border-t border-gray-200">
-                                <h4 className="font-bold text-gray-700 mb-2">Response Details</h4>
-                                <Input 
-                                    label="Response Date" 
-                                    type="date" 
-                                    name="officeResponseDate"
-                                    value={officeData.officeResponseDate}
-                                    onChange={handleOfficeChange}
-                                />
-                                <div>
-                                    <label className="block text-coha-900 text-sm font-semibold mb-1 uppercase tracking-wider">Method</label>
-                                    <select 
-                                        name="officeResponseMethod" 
-                                        value={officeData.officeResponseMethod} 
-                                        onChange={handleOfficeChange}
-                                        className="w-full p-3 border-2 border-gray-300 focus:border-coha-500 outline-none bg-white rounded-none"
-                                    >
-                                        <option value="Email">Email</option>
-                                        <option value="Phone">Phone</option>
-                                        <option value="Post">Post</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="pt-6">
-                                <Button fullWidth onClick={handleApprove} disabled={isProcessing} className="mb-2">
-                                    {isProcessing ? 'Enrolling...' : <><Check size={20} /> Approve & Enroll</>}
+                            <div className="pt-6 flex flex-col gap-3">
+                                <Button fullWidth onClick={handleApprove} disabled={isProcessing} className="bg-green-600 hover:bg-green-700 border-none">
+                                    {isProcessing ? 'Processing...' : <><Check size={20} /> Approve & Request Payment</>}
+                                </Button>
+                                <Button fullWidth onClick={() => setRejectModalOpen(true)} disabled={isProcessing} variant="danger">
+                                    <X size={20} /> Reject Application
                                 </Button>
                             </div>
                         </div>

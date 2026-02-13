@@ -12,6 +12,7 @@ import { StudentDetailsPage } from './pages/admin/StudentDetails';
 import { ApplicationsPage } from './pages/admin/Applications';
 import { ApplicationDetailsPage } from './pages/admin/ApplicationDetails';
 import { SettingsPage } from './pages/admin/Settings';
+import { ParentDashboard } from './pages/parent/Dashboard';
 import { UserRole } from './types';
 import { seedAdminUser, getAdminProfile } from './services/dataService';
 import { Toast } from './components/ui/Toast';
@@ -133,11 +134,14 @@ const App: React.FC = () => {
             </ProtectedRoute>
           } />
 
-           {/* Parent Routes - Placeholders */}
+           {/* Parent Routes */}
            <Route path="/parent/*" element={
             <ProtectedRoute isAuthenticated={!!user} userRole={role} allowedRoles={[UserRole.PARENT]}>
                <AppLayout role={UserRole.PARENT} user={user} onLogout={handleLogout}>
-                <div className="p-8 text-center text-gray-500">Parent Dashboard Content Here</div>
+                  <Routes>
+                      <Route path="dashboard" element={<ParentDashboard user={user} />} />
+                      <Route path="*" element={<Navigate to="dashboard" />} />
+                  </Routes>
               </AppLayout>
             </ProtectedRoute>
           } />

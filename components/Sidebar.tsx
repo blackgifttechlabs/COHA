@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Users, GraduationCap, LogOut, X, FileText, Settings } from 'lucide-react';
 import { UserRole } from '../types';
+import { getPendingActionCounts } from '../services/dataService';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,9 +12,26 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogout }) => {
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  useEffect(() => {
+    // Only fetch counts if Admin
+    if (role === UserRole.ADMIN) {
+      const fetchCounts = async () => {
+        const counts = await getPendingActionCounts();
+        setBadgeCount(counts.total);
+      };
+      fetchCounts();
+      
+      // Optional: Refresh counts every minute
+      const interval = setInterval(fetchCounts, 60000);
+      return () => clearInterval(interval);
+    }
+  }, [role]);
+
   const adminLinks = [
     { label: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Applications', path: '/admin/applications', icon: <FileText size={20} /> },
+    { label: 'Applications', path: '/admin/applications', icon: <FileText size={20} />, badge: badgeCount },
     { label: 'Teachers', path: '/admin/teachers', icon: <Users size={20} /> },
     { label: 'Students', path: '/admin/students', icon: <GraduationCap size={20} /> },
     { label: 'Settings', path: '/admin/settings', icon: <Settings size={20} /> },
@@ -70,15 +88,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogou
                   to={link.path}
                   onClick={() => window.innerWidth < 1024 && onClose()}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-3 transition-colors ${
+                    `flex items-center justify-between px-4 py-3 transition-colors ${
                       isActive 
                         ? 'bg-coha-500 text-white font-semibold border-l-4 border-white' 
                         : 'text-gray-300 hover:bg-coha-800 hover:text-white'
                     }`
                   }
                 >
-                  {link.icon}
-                  <span>{link.label}</span>
+                  <div className="flex items-center gap-3">
+                    {link.icon}
+                    <span>{link.label}</span>
+                  </div>
+                  {/* Badge */}
+                  {(link as any).badge > 0 && (
+                     <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {(link as any).badge}
+                     </span>
+                  )}
                 </NavLink>
               </li>
             ))}

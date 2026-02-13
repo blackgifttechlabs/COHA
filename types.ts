@@ -51,6 +51,9 @@ export interface SystemSettings {
   
   termStartDate: string;
   termStartTime: string;
+  
+  // Counters
+  lastStudentId?: number; 
 }
 
 export interface Application {
@@ -123,6 +126,8 @@ export interface Application {
   officeResponseMethod?: string;
 }
 
+export type StudentStatus = 'WAITING_PAYMENT' | 'PAYMENT_VERIFICATION' | 'ASSESSMENT' | 'ENROLLED';
+
 // Student extends Application to allow full profile view
 export interface Student extends Partial<Application> {
   id: string;
@@ -131,4 +136,20 @@ export interface Student extends Partial<Application> {
   parentPin: string;
   parentName: string;
   enrolledAt?: any;
+  studentStatus: StudentStatus;
+  
+  // Payment Verification
+  receiptNumber?: string;
+  receiptSubmissionDate?: any;
+  paymentRejected?: boolean; // New flag for parent dashboard
+}
+
+export interface Receipt {
+  id?: string;
+  number: string;
+  amount: string;
+  date: string;
+  isUsed: boolean;
+  usedByStudentId?: string;
+  createdAt?: any;
 }
