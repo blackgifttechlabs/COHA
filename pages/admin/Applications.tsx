@@ -144,7 +144,7 @@ export const ApplicationsPage: React.FC = () => {
         const fullName = `${app.firstName} ${app.surname}`.toLowerCase();
         const parent = (app.fatherName || app.motherName || '').toLowerCase();
         const term = searchTerm.toLowerCase();
-        return fullName.includes(term) || parent.includes(term) || app.grade.toLowerCase().includes(term);
+        return fullName.includes(term) || parent.includes(term) || (app.grade || '').toLowerCase().includes(term);
       })();
       return matchesSearch && app.status === statusFilter;
   });

@@ -110,6 +110,7 @@ export interface AssessmentDay {
   // Form 3: ABC Behaviour (Positive/Negative -> /5)
   abcScore: number;
   abcLogs?: ABCLog[];
+  dailyTotalScore?: number; // Normalized 0.0 - 5.0 score for the day
 }
 
 export interface AssessmentData {
