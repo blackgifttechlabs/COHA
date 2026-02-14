@@ -68,29 +68,66 @@ export const ApplicationDetailsPage: React.FC = () => {
         await updateApplication(id, updatedData);
         setApp({ ...app, ...updatedData });
 
-        // 1. Initial Approval -> Create Student with "WAITING_PAYMENT"
         const result = await approveApplicationInitial(app);
 
         if (settings && result) {
-            const parentEmail = app.fatherEmail; 
-            const subject = `Admission Conditional Approval: ${app.firstName} ${app.surname} - Circle of Hope Academy`;
+            const parentEmail = app.fatherEmail || app.motherEmail; 
+            const subject = `ADMISSION CONDITIONAL APPROVAL: ${app.firstName} ${app.surname} - COHA`;
             
             const body = `Dear Parent/Guardian,
 
-Your application for ${app.firstName} ${app.surname} has been CONDITIONALLY APPROVED.
+CONGRATULATIONS! We are pleased to inform you that the application for ${app.firstName} ${app.surname} has been CONDITIONALLY APPROVED for enrollment at Circle of Hope Academy (COHA).
 
-NEXT STEP: PAYMENT CONFIRMATION
-To finalize the enrollment, you must login to the Parent Portal and enter your application fee receipt number.
+------------------------------------------------------------
+URGENT ACTION REQUIRED: REGISTRATION FEE
+------------------------------------------------------------
+To secure this placement, a non-refundable REGISTRATION FEE of N$ 300.00 is payable immediately. Enrolment is not guaranteed until this payment is verified.
 
-LOGIN DETAILS:
-Student Name: ${app.firstName} ${app.surname}
+------------------------------------------------------------
+OFFICIAL FEE STRUCTURE 2026
+------------------------------------------------------------
+CATEGORY                        | AMOUNT      | FREQUENCY
+------------------------------------------------------------
+Registration Fee                | N$ 300.00   | Once-off
+Tuition (Special Classes)       | N$ 2,300.00 | Monthly
+Tuition (Mainstream - Termly)   | N$ 7,100.00 | Per Term
+Kindergarten (Mainstream)       | N$ 550.00   | Monthly
+Pre-Primary (Mainstream)        | N$ 650.00   | Monthly
+Grades 1 - 3 (Mainstream)       | N$ 1,300.00 | Monthly
+Grades 4 - 7 (Mainstream)       | N$ 1,700.00 | Monthly
+Hostel Fees (Boarders)          | N$ 1,400.00 | Monthly
+------------------------------------------------------------
+
+------------------------------------------------------------
+BANKING DETAILS: TUITION, REGISTRATION & HOSTEL
+------------------------------------------------------------
+Bank Name:      First National Bank (FNB)
+Account Name:   COHA TUTORIAL ACADEMY
+Account Number: 64283855814
+Branch:         Ongwediva
+Reference:      ${app.firstName} ${app.surname} (Learner's Full Name)
+
+------------------------------------------------------------
+BANKING DETAILS: FOOD CONTRIBUTION (HOSTEL ONLY)
+------------------------------------------------------------
+Hostel Food:    N$ 3,500.00 (Per Term)
+Bank Name:      First National Bank (FNB)
+Account Name:   SEFLANA CASH AND CURRY
+Account Number: 62260164539 (Cheque)
+Reference:      22229 + ${app.firstName} ${app.surname}
+
+IMPORTANT: Please email proof of payment to acoha67@gmail.com within 48 hours of payment.
+
+PORTAL ACCESS:
+Use the following details to login and track your child's progress:
+Parent Portal URL: [School Website Link]
 Parent PIN: ${result.pin}
 
-Please login at the school portal and verify your payment to proceed to assessment.
+Warm regards,
 
-Regards,
-${settings.adminName}
-Circle of Hope Academy`;
+Admissions Office
+Circle of Hope Academy (COHA)
+"Accessible Education for All"`;
             
             window.location.href = `mailto:${parentEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         }
@@ -108,7 +145,6 @@ Circle of Hope Academy`;
           setRejectModalOpen(false);
           setApp({...app, status: 'REJECTED'});
           
-          // Send Rejection Email
           const subject = `Admission Update: ${app.firstName} ${app.surname}`;
           const body = `Dear Parent/Guardian,\n\nWe regret to inform you that the application for ${app.firstName} ${app.surname} was not successful at this time.\n\nRegards,\nCircle of Hope Academy`;
            window.location.href = `mailto:${app.fatherEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;

@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getStudentById, getSystemSettings, getTeacherByClass, getReceipts } from '../../services/dataService';
 import { Student, Teacher, SystemSettings } from '../../types';
 import { Loader } from '../../components/ui/Loader';
-import { User, BookOpen, Calendar, DollarSign, CheckCircle, Clock } from 'lucide-react';
+import { User, BookOpen, Calendar, DollarSign, CheckCircle, Clock, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
 
 interface ParentDashboardProps {
   user: any;
 }
 
 export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
+  const navigate = useNavigate();
   const [student, setStudent] = useState<Student | null>(null);
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [settings, setSettings] = useState<SystemSettings | null>(null);
@@ -24,31 +27,19 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
         setSettings(setts);
 
         if (stud) {
-           // Fetch Teacher if class assigned
            if (stud.assignedClass) {
                const t = await getTeacherByClass(stud.assignedClass);
                setTeacher(t);
            }
 
-           // Calculate Fees (Simplified Logic)
-           // In a real app, this would be more complex based on months enrolled
            if (setts && setts.fees) {
                let monthlyFee = 0;
-               // Determine fee based on division or grade
                const feeItem = setts.fees.find(f => f.category.includes('Tuition'));
                if (feeItem) monthlyFee = parseFloat(feeItem.amount) || 0;
 
-               // Calculate paid from Receipts
-               // We only have the initial receipt in student record for now, 
-               // ideally we'd query receipts collection by usedByStudentId.
-               // For this demo, let's assume the initial receipt + dummy calculation
-               // Fetch all receipts to check total paid
                const allReceipts = await getReceipts();
                const studentReceipts = allReceipts.filter(r => r.usedByStudentId === stud.id);
-               
                const totalPaid = studentReceipts.reduce((acc, r) => acc + parseFloat(r.amount), 0);
-               
-               // Assume 12 months for year
                const totalYearly = monthlyFee * 12;
                
                setFinancials({
@@ -69,6 +60,7 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
 
   const isEnrolled = student.studentStatus === 'ENROLLED';
   const isAssessment = student.studentStatus === 'ASSESSMENT';
+  const isWaitingPayment = student.studentStatus === 'WAITING_PAYMENT';
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -81,13 +73,40 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
         </div>
         <div className="flex items-center gap-2">
             <span className={`px-4 py-2 rounded-full text-sm font-bold uppercase flex items-center gap-2 border
-                ${isEnrolled ? 'bg-green-100 text-green-700 border-green-200' : 'bg-purple-100 text-purple-700 border-purple-200'}
+                ${isEnrolled ? 'bg-green-100 text-green-700 border-green-200' : 
+                  isWaitingPayment ? 'bg-red-100 text-red-700 border-red-200' :
+                  'bg-purple-100 text-purple-700 border-purple-200'}
             `}>
                 {isEnrolled ? <CheckCircle size={18}/> : <Clock size={18}/>}
-                {student.studentStatus}
+                {student.studentStatus.replace('_', ' ')}
             </span>
         </div>
       </div>
+
+      {/* ACTION REQUIRED: Pending Payment */}
+      {isWaitingPayment && (
+          <div className="bg-red-50 border-2 border-red-200 p-6 shadow-lg animate-pulse hover:animate-none transition-all">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex items-start gap-4 text-center md:text-left">
+                      <div className="bg-red-100 p-3 rounded-full text-red-600 shrink-0 mx-auto md:mx-0">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <div>
+                          <h3 className="text-xl font-bold text-red-900 uppercase tracking-tighter">Action Required: Registration Payment</h3>
+                          <p className="text-red-800 font-medium">
+                              Your application has been conditionally approved. To secure your spot, please pay the <b>N$300</b> registration fee and enter the receipt number.
+                          </p>
+                      </div>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/parent/assessment-form')}
+                    className="bg-red-600 hover:bg-red-700 border-none px-8 py-4 text-lg animate-bounce"
+                  >
+                    Enter Receipt Number <ArrowRight size={20} />
+                  </Button>
+              </div>
+          </div>
+      )}
 
       {/* Notification for Completed Assessment */}
       {isEnrolled && student.assessment?.isComplete && (
@@ -113,20 +132,20 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
           <div className="bg-white p-6 shadow-sm border-t-4 border-coha-500">
              <div className="flex items-center gap-3 mb-4 text-gray-700 border-b pb-2">
                  <BookOpen className="text-coha-500" size={20} />
-                 <h3 className="font-bold">Class Details</h3>
+                 <h3 className="font-bold text-xs uppercase tracking-widest">Class Details</h3>
              </div>
              <div className="space-y-3">
                  <div>
-                     <p className="text-xs text-gray-500 uppercase font-bold">Assigned Class</p>
-                     <p className="text-xl font-bold text-gray-900">{student.assignedClass || 'Pending Placement'}</p>
+                     <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Assigned Class</p>
+                     <p className="text-xl font-black text-gray-900">{student.assignedClass || 'Pending Placement'}</p>
                  </div>
                  <div>
-                     <p className="text-xs text-gray-500 uppercase font-bold">Division</p>
-                     <p className="text-gray-900">{student.division}</p>
+                     <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Division</p>
+                     <p className="text-gray-900 font-bold">{student.division}</p>
                  </div>
                  <div>
-                     <p className="text-xs text-gray-500 uppercase font-bold">Term</p>
-                     <p className="text-gray-900">Term 1, 2026</p>
+                     <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Academic Term</p>
+                     <p className="text-gray-900 font-bold">Term 1, 2026</p>
                  </div>
              </div>
           </div>
@@ -135,22 +154,22 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
           <div className="bg-white p-6 shadow-sm border-t-4 border-purple-500">
              <div className="flex items-center gap-3 mb-4 text-gray-700 border-b pb-2">
                  <User className="text-purple-500" size={20} />
-                 <h3 className="font-bold">Class Teacher</h3>
+                 <h3 className="font-bold text-xs uppercase tracking-widest">Class Teacher</h3>
              </div>
              {teacher ? (
                  <div className="space-y-3">
                     <div>
-                        <p className="text-xs text-gray-500 uppercase font-bold">Name</p>
-                        <p className="text-xl font-bold text-gray-900">{teacher.name}</p>
+                        <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Name</p>
+                        <p className="text-xl font-black text-gray-900">{teacher.name}</p>
                     </div>
                     <div>
-                        <p className="text-xs text-gray-500 uppercase font-bold">Email</p>
-                        <p className="text-gray-900">{teacher.email || 'Not available'}</p>
+                        <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Email Address</p>
+                        <p className="text-gray-900 font-bold">{teacher.email || 'Not available'}</p>
                     </div>
-                    <button className="text-sm text-purple-600 font-bold hover:underline mt-2">Send Message</button>
+                    <button className="text-xs text-purple-600 font-black uppercase tracking-widest hover:underline mt-2">Send Message</button>
                  </div>
              ) : (
-                 <p className="text-gray-500 italic">No teacher assigned yet.</p>
+                 <p className="text-gray-500 italic text-sm">Teacher assignment will be finalized after assessment.</p>
              )}
           </div>
 
@@ -158,23 +177,23 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ user }) => {
           <div className="bg-white p-6 shadow-sm border-t-4 border-green-500">
              <div className="flex items-center gap-3 mb-4 text-gray-700 border-b pb-2">
                  <DollarSign className="text-green-500" size={20} />
-                 <h3 className="font-bold">Fee Status</h3>
+                 <h3 className="font-bold text-xs uppercase tracking-widest">Financial Summary</h3>
              </div>
              <div className="space-y-4">
-                 <div className="flex justify-between items-center">
-                     <span className="text-gray-600">Total Fees (Year)</span>
-                     <span className="font-bold text-gray-900">N$ {financials.totalFees.toLocaleString()}</span>
+                 <div className="flex justify-between items-center text-sm">
+                     <span className="text-gray-500 font-bold uppercase">Expected (Annual)</span>
+                     <span className="font-black text-gray-900">N$ {financials.totalFees.toLocaleString()}</span>
                  </div>
-                 <div className="flex justify-between items-center text-green-700">
-                     <span className="font-bold">Total Paid</span>
-                     <span className="font-bold">N$ {financials.paid.toLocaleString()}</span>
+                 <div className="flex justify-between items-center text-green-700 text-sm">
+                     <span className="font-black uppercase">Verified Paid</span>
+                     <span className="font-black">N$ {financials.paid.toLocaleString()}</span>
                  </div>
-                 <div className="border-t pt-2 flex justify-between items-center">
-                     <span className="text-red-600 font-bold uppercase text-sm">Balance Due</span>
-                     <span className="font-bold text-xl text-red-600">N$ {financials.balance.toLocaleString()}</span>
+                 <div className="border-t pt-3 flex justify-between items-center">
+                     <span className="text-red-600 font-black uppercase text-xs">Balance Outstanding</span>
+                     <span className="font-black text-2xl text-red-600 tracking-tighter">N$ {financials.balance.toLocaleString()}</span>
                  </div>
-                 <button className="w-full py-2 bg-coha-900 text-white text-sm font-bold hover:bg-coha-800 transition-colors">
-                     View Receipts
+                 <button className="w-full py-3 bg-coha-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-coha-800 transition-colors shadow-md">
+                     View All Receipts
                  </button>
              </div>
           </div>

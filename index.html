@@ -30,9 +30,19 @@
       body {
         background-color: #f8f9fa;
       }
-      /* Enforcing M3-like perfect corners globally where applicable */
+      /* Enforcing M3-like perfect corners globally */
       * {
         border-radius: 0px !important;
+      }
+      
+      /* Animated Tick CSS */
+      @keyframes drawTick {
+        to { stroke-dashoffset: 0; }
+      }
+      .animate-draw-tick {
+        stroke-dasharray: 100;
+        stroke-dashoffset: 100;
+        animation: drawTick 0.8s ease-out forwards;
       }
     </style>
   <script type="importmap">

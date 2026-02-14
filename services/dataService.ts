@@ -152,9 +152,9 @@ export const approveApplicationInitial = async (app: Application): Promise<{pin:
         studentStatus: 'WAITING_PAYMENT', 
         enrolledAt: Timestamp.now(),
         division: app.division || (app.isSpecialNeeds ? Division.SPECIAL_NEEDS : Division.MAINSTREAM),
-        level: app.level || (app.isSpecialNeeds ? determineSpecialNeedsLevel(app.dob) : undefined),
+        level: app.level || (app.isSpecialNeeds ? determineSpecialNeedsLevel(app.dob) : ''),
         grade: app.grade || '',
-        assignedClass: app.isSpecialNeeds ? app.level : app.grade 
+        assignedClass: app.isSpecialNeeds ? (app.level || '') : (app.grade || '') 
     };
     
     if (studentData.division === Division.SPECIAL_NEEDS) {
@@ -488,20 +488,27 @@ export const getAdminProfile = async () => {
   };
 };
 
+/**
+ * FIXED: Sanitizes data to remove undefined values before calling Firestore.
+ * Initializes 'level' as an empty string if not applicable.
+ */
 export const submitApplication = async (applicationData: Partial<Application>) => {
   try {
     const division = applicationData.isSpecialNeeds ? Division.SPECIAL_NEEDS : Division.MAINSTREAM;
-    let level = undefined;
+    let level = '';
     
     if (division === Division.SPECIAL_NEEDS && applicationData.dob) {
         level = determineSpecialNeedsLevel(applicationData.dob);
     }
 
+    // Sanitize input to remove any undefined properties from the spread
+    const sanitizedData = JSON.parse(JSON.stringify(applicationData));
+
     await addDoc(collection(db, APPLICATIONS_COLLECTION), {
-      ...applicationData,
+      ...sanitizedData,
       division,
       level,
-      grade: division === Division.MAINSTREAM ? applicationData.grade : '', 
+      grade: division === Division.MAINSTREAM ? (applicationData.grade || '') : '', 
       status: 'PENDING',
       submissionDate: Timestamp.now()
     });

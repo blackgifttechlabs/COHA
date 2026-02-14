@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, AlertCircle } from 'lucide-react';
 
 interface Option {
   label: string;
@@ -15,6 +15,7 @@ interface CustomSelectProps {
   placeholder?: string;
   className?: string;
   name?: string; // For form handling
+  error?: string; // Added error prop
 }
 
 export const CustomSelect: React.FC<CustomSelectProps> = ({ 
@@ -25,7 +26,8 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   required,
   placeholder = "Choose",
   className = "",
-  name
+  name,
+  error
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,10 +44,14 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
   }, []);
 
   const handleSelect = (val: string) => {
-    // If using name prop (common in handlers), we might need to simulate an event, 
-    // but here we just pass the value to the parent handler
     onChange(val);
     setIsOpen(false);
+  };
+
+  const getBorderColor = () => {
+    if (error) return 'border-red-500 bg-red-50/30';
+    if (isOpen) return 'border-coha-500 bg-gray-100';
+    return 'border-gray-300';
   };
 
   return (
@@ -56,16 +62,22 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
         </label>
       )}
       <div 
-        className={`w-full border-b-2 bg-gray-50 cursor-pointer transition-colors ${isOpen ? 'border-coha-500 bg-gray-100' : 'border-gray-300'}`}
+        className={`w-full border-b-2 cursor-pointer transition-colors ${getBorderColor()}`}
         onClick={() => setIsOpen(!isOpen)}
       >
         <div className="p-3 flex justify-between items-center">
           <span className={`${!value ? 'text-gray-500' : 'text-gray-900'} font-medium`}>
             {value ? options.find(o => o.value === value)?.label || value : placeholder}
           </span>
-          <ChevronDown size={18} className={`transition-transform duration-300 ${isOpen ? 'rotate-180 text-coha-500' : 'text-gray-500'}`} />
+          <ChevronDown size={18} className={`transition-transform duration-300 ${isOpen ? 'rotate-180 text-coha-500' : error ? 'text-red-500' : 'text-gray-500'}`} />
         </div>
       </div>
+      
+      {error && (
+        <p className="text-red-600 text-xs mt-1 flex items-center gap-1">
+          <AlertCircle size={12} /> {error}
+        </p>
+      )}
       
       {/* Scroll Book Animation */}
       <div 
@@ -86,7 +98,6 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           )}
         </div>
       </div>
-      {/* Hidden input for form submission if needed */}
       <input type="hidden" name={name} value={value} />
     </div>
   );

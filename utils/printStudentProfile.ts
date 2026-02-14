@@ -21,7 +21,6 @@ export const printStudentProfile = async (student: Student) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   
-  // --- Header ---
   const logoUrl = "https://i.ibb.co/LzYXwYfX/logo.png";
   const logoData = await fetchImage(logoUrl);
   if (logoData) {
@@ -29,12 +28,12 @@ export const printStudentProfile = async (student: Student) => {
   }
 
   doc.setFontSize(16);
-  doc.setTextColor(0, 29, 100); // COHA Blue
+  doc.setTextColor(0, 29, 100); 
   doc.setFont("helvetica", "bold");
   doc.text("CIRCLE OF HOPE ACADEMY", 45, 20);
   
   doc.setFontSize(9);
-  doc.setTextColor(0, 152, 241); // Light Blue
+  doc.setTextColor(0, 152, 241); 
   doc.text("ACCESSIBLE EDUCATION FOR ALL", 45, 25);
   
   doc.setFontSize(8);
@@ -44,12 +43,10 @@ export const printStudentProfile = async (student: Student) => {
   doc.text("Cell: +264 81 666 4074", pageWidth - 14, 22, { align: "right" });
   doc.text("circleofhopeacademy@yahoo.com", pageWidth - 14, 26, { align: "right" });
 
-  // Divider
   doc.setDrawColor(0, 29, 100);
   doc.setLineWidth(0.5);
   doc.line(14, 38, pageWidth - 14, 38);
 
-  // --- Student Summary ---
   doc.setFillColor(245, 247, 250);
   doc.rect(14, 42, pageWidth - 28, 20, 'F');
   
@@ -61,11 +58,12 @@ export const printStudentProfile = async (student: Student) => {
   doc.setFontSize(9);
   doc.setTextColor(100, 100, 100);
   doc.setFont("helvetica", "normal");
-  doc.text(`Grade: ${student.grade || '-'}   |   Student ID: ${student.id.substring(0, 8)}   |   Enrolled: ${student.enrolledAt?.toDate ? student.enrolledAt.toDate().toLocaleDateString() : 'N/A'}`, 18, 57);
+  
+  const studentGrade = student.assignedClass || student.grade || student.level || 'Placement Pending';
+  doc.text(`Grade/Level: ${studentGrade}   |   Student ID: ${student.id}   |   Enrolled: ${student.enrolledAt?.toDate ? student.enrolledAt.toDate().toLocaleDateString() : 'N/A'}`, 18, 57);
 
   let currentY = 66;
 
-  // --- Common Table Styles ---
   const tableStyles: any = {
       theme: 'grid',
       headStyles: { fillColor: [0, 29, 100], fontSize: 8, fontStyle: 'bold', textColor: 255 },
@@ -74,20 +72,15 @@ export const printStudentProfile = async (student: Student) => {
       margin: { left: 14, right: 14 }
   };
 
-  // --- Left Column Tables (Learner & Emergency) ---
-  // We use the startY of the previous table to place the next one.
-  // Since we want columns, we need to manipulate margins/widths or use startY carefully.
-  // To ensure it fits on one page, we will stack them cleanly as full width tables but compact.
-
-  // Table 1: Learner Info
   autoTable(doc, {
       startY: currentY,
       head: [[{ content: 'LEARNER INFORMATION', colSpan: 4, styles: { halign: 'left' } }]],
       body: [
-          ['Full Name', student.name || '-', 'Date of Birth', student.dob || '-'],
-          ['Gender', student.gender || '-', 'Citizenship', student.citizenship || '-'],
+          ['Full Name', student.name || '-', 'Student ID', student.id],
+          ['Date of Birth', student.dob || '-', 'Gender', student.gender || '-'],
+          ['Citizenship', student.citizenship || '-', 'Region', student.region || '-'],
           ['Address', { content: student.address || '-', colSpan: 3 }],
-          ['Special Needs', student.isSpecialNeeds ? `Yes (${student.specialNeedsType || '-'})` : 'No', 'Parent PIN', student.parentPin || '****']
+          ['Special Needs', student.isSpecialNeeds ? `Yes (${student.specialNeedsType || '-'})` : 'No', 'Current Class', studentGrade]
       ],
       ...tableStyles,
       columnStyles: { 
@@ -99,7 +92,6 @@ export const printStudentProfile = async (student: Student) => {
 
   currentY = (doc as any).lastAutoTable.finalY + 5;
 
-  // Table 2: Parents
   autoTable(doc, {
       startY: currentY,
       head: [[{ content: 'PARENT / GUARDIAN DETAILS', colSpan: 4, styles: { halign: 'left' } }]],
@@ -118,7 +110,6 @@ export const printStudentProfile = async (student: Student) => {
 
   currentY = (doc as any).lastAutoTable.finalY + 5;
 
-  // Table 3: Emergency & Medical
   autoTable(doc, {
       startY: currentY,
       head: [[{ content: 'EMERGENCY & MEDICAL', colSpan: 4, styles: { halign: 'left' } }]],
@@ -137,29 +128,10 @@ export const printStudentProfile = async (student: Student) => {
       }
   });
 
-  currentY = (doc as any).lastAutoTable.finalY + 5;
-
-   // Table 4: History
-   autoTable(doc, {
-    startY: currentY,
-    head: [[{ content: 'ACADEMIC HISTORY', colSpan: 2, styles: { halign: 'left' } }]],
-    body: [
-        ['Previous School', student.previousSchool || 'None'],
-        ['Highest Grade', student.highestGrade || 'N/A'],
-        ['English Proficiency', student.langEnglish || '-'],
-        ['Other Languages', student.langOther1Name ? `${student.langOther1Name} (${student.langOther1Rating || '-'})` : '-']
-    ],
-    ...tableStyles,
-    columnStyles: { 
-        0: { fontStyle: 'bold', width: 40, fillColor: [248, 248, 248] }
-    }
-  });
-
-  // Footer
   doc.setFontSize(8);
   doc.setTextColor(150, 150, 150);
-  doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 285);
+  doc.text(`Official Document Generated on ${new Date().toLocaleDateString()}`, 14, 285);
   doc.text("Page 1 of 1", pageWidth - 14, 285, { align: "right" });
 
-  doc.save(`${student.surname || 'Student'}_${student.firstName || 'Profile'}_Profile.pdf`);
+  doc.save(`Profile_${student.id}.pdf`);
 };

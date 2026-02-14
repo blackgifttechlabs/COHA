@@ -13,16 +13,21 @@ const STEPS = [
   "Consent"
 ];
 
-// Simple Input for Google Forms Style
-const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, className = '', required, ...props }) => (
+// Enhanced Input for Validation Feedback
+const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string }> = ({ label, className = '', required, error, ...props }) => (
   <div className="w-full mb-6">
     <label className="block text-gray-800 text-sm font-medium mb-2">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
     <input
-      className={`w-full p-3 border-b-2 border-gray-300 focus:border-coha-500 outline-none transition-colors bg-gray-50 focus:bg-white text-gray-900 ${className}`}
+      className={`w-full p-3 border-b-2 outline-none transition-colors ${error ? 'border-red-500 bg-red-50 focus:bg-white' : 'border-gray-300 bg-gray-50 focus:bg-white focus:border-coha-500'} text-gray-900 ${className}`}
       {...props}
     />
+    {error && (
+        <p className="text-red-600 text-xs mt-1 flex items-center gap-1 font-medium">
+            <AlertCircle size={12} /> {error}
+        </p>
+    )}
   </div>
 );
 
@@ -36,7 +41,8 @@ export const ApplyPage: React.FC = () => {
   
   // Validation State
   const [shakeError, setShakeError] = useState(false);
-  const [errorField, setErrorField] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [stepError, setStepError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     surname: '', firstName: '', dob: '', citizenship: '', gender: 'Male', 
@@ -70,7 +76,6 @@ export const ApplyPage: React.FC = () => {
     fetchGrades();
   }, []);
 
-  // Recalculate level when DOB or Special Needs changes
   useEffect(() => {
     if (formData.isSpecialNeeds && formData.dob) {
         const lvl = determineSpecialNeedsLevel(formData.dob);
@@ -83,14 +88,73 @@ export const ApplyPage: React.FC = () => {
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData(prev => ({ ...prev, [name]: checked }));
-      if (name === 'agreed' || name === 'medicalConsent') setErrorField(null); // Clear error on interaction
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    // Clear error for this field as user types
+    if (errors[name]) {
+        const newErrors = { ...errors };
+        delete newErrors[name];
+        setErrors(newErrors);
+        setStepError(null);
     }
   };
 
   const handleCustomSelect = (name: string, value: string) => {
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+        const newErrors = { ...errors };
+        delete newErrors[name];
+        setErrors(newErrors);
+        setStepError(null);
+    }
+  };
+
+  const validateStep = (step: number): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (step === 0) {
+        if (!formData.surname.trim()) newErrors.surname = "Surname is required";
+        if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
+        if (!formData.dob) newErrors.dob = "Date of birth is required";
+        if (!formData.citizenship.trim()) newErrors.citizenship = "Citizenship is required";
+        if (!formData.address.trim()) newErrors.address = "Address is required";
+        if (!formData.isSpecialNeeds && !formData.grade) newErrors.grade = "Grade selection is required";
+        if (formData.isSpecialNeeds && !formData.specialNeedsType) newErrors.specialNeedsType = "Please select the type of special needs";
+    } else if (step === 1) {
+        if (!formData.fatherName.trim()) newErrors.fatherName = "Father/Guardian name is required";
+        if (!formData.fatherPhone.trim()) newErrors.fatherPhone = "Phone number is required";
+        if (!formData.fatherEmail.trim()) newErrors.fatherEmail = "Email is required";
+        if (!formData.emergencyName.trim()) newErrors.emergencyName = "Emergency contact name is required";
+        if (!formData.emergencyRelationship.trim()) newErrors.emergencyRelationship = "Relationship is required";
+        if (!formData.emergencyCell.trim()) newErrors.emergencyCell = "Cell number is required";
+    } else if (step === 2) {
+        if (formData.hasPreviousSchool) {
+            if (!formData.previousSchool.trim()) newErrors.previousSchool = "Please provide the previous school name";
+            if (!formData.highestGrade.trim()) newErrors.highestGrade = "Highest grade is required";
+        }
+    } else if (step === 3) {
+        if (formData.hasMedicalAid) {
+            if (!formData.medicalAidName?.trim()) newErrors.medicalAidName = "Medical aid name is required";
+            if (!formData.medicalAidMemberID?.trim()) newErrors.medicalAidMemberID = "Member ID is required";
+        }
+    } else if (step === 4) {
+        if (!formData.medicalConsent) newErrors.medicalConsent = "You must provide medical consent";
+        if (!formData.agreed) newErrors.agreed = "You must agree to the terms";
+    }
+
+    const hasErrors = Object.keys(newErrors).length > 0;
+    if (hasErrors) {
+        setErrors(newErrors);
+        setStepError("Please fill in all mandatory fields before proceeding.");
+        setShakeError(true);
+        setTimeout(() => setShakeError(false), 500);
+        return false;
+    }
+
+    setErrors({});
+    setStepError(null);
+    return true;
   };
 
   const scrollToTop = () => {
@@ -98,9 +162,11 @@ export const ApplyPage: React.FC = () => {
   };
 
   const handleNext = () => {
-    if (currentStep < STEPS.length - 1) {
-      setCurrentStep(prev => prev + 1);
-      scrollToTop();
+    if (validateStep(currentStep)) {
+        if (currentStep < STEPS.length - 1) {
+          setCurrentStep(prev => prev + 1);
+          scrollToTop();
+        }
     }
   };
 
@@ -114,19 +180,15 @@ export const ApplyPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation Check for Consent & Agreement
-    if (!formData.medicalConsent || !formData.agreed) {
-      setShakeError(true);
-      setErrorField('consent');
-      setTimeout(() => setShakeError(false), 600); 
-      return;
-    }
+    if (!validateStep(currentStep)) return;
 
     setLoading(true);
     const success = await submitApplication(formData as any);
     if (success) {
       setSubmitted(true);
       scrollToTop();
+    } else {
+        setStepError("System failed to submit application. Please try again or contact support.");
     }
     setLoading(false);
   };
@@ -161,14 +223,6 @@ export const ApplyPage: React.FC = () => {
         .animate-shake {
           animation: shake 0.5s ease-in-out;
         }
-        .error-pulse {
-          animation: pulse-red 1s infinite;
-        }
-        @keyframes pulse-red {
-          0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-          70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
       `}</style>
 
       {/* Header */}
@@ -183,7 +237,6 @@ export const ApplyPage: React.FC = () => {
         {/* Stepper */}
         <div className="px-5 pb-3 pt-1">
           <div className="flex items-center justify-between relative">
-            {/* Connecting Line */}
             <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-200 -z-10 transform -translate-y-1/2"></div>
             <div 
               className="absolute top-1/2 left-0 h-0.5 bg-coha-500 -z-10 transform -translate-y-1/2 transition-all duration-300"
@@ -220,11 +273,10 @@ export const ApplyPage: React.FC = () => {
         {/* Step 1: Learner */}
         {currentStep === 0 && (
           <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Col */}
             <div>
-                <FormInput name="surname" label="Surname" value={formData.surname} onChange={handleChange} required />
-                <FormInput name="firstName" label="First Name" value={formData.firstName} onChange={handleChange} required />
-                <FormInput name="dob" label="Date of Birth" type="date" value={formData.dob} onChange={handleChange} required />
+                <FormInput name="surname" label="Surname" value={formData.surname} onChange={handleChange} required error={errors.surname} />
+                <FormInput name="firstName" label="First Name" value={formData.firstName} onChange={handleChange} required error={errors.firstName} />
+                <FormInput name="dob" label="Date of Birth" type="date" value={formData.dob} onChange={handleChange} required error={errors.dob} />
                 
                 <CustomSelect 
                   label="Gender"
@@ -233,10 +285,9 @@ export const ApplyPage: React.FC = () => {
                   onChange={(val) => handleCustomSelect('gender', val)}
                 />
 
-                <FormInput name="citizenship" label="Citizenship" value={formData.citizenship} onChange={handleChange} required />
+                <FormInput name="citizenship" label="Citizenship" value={formData.citizenship} onChange={handleChange} required error={errors.citizenship} />
             </div>
 
-            {/* Right Col */}
             <div>
                 <div className="mb-6">
                   <label className="flex items-start gap-3 cursor-pointer p-4 bg-gray-50 border border-gray-200 rounded-lg hover:border-coha-300 transition-colors">
@@ -249,7 +300,7 @@ export const ApplyPage: React.FC = () => {
                     />
                     <div>
                       <span className="font-bold text-gray-800 text-sm">Special Needs Division</span>
-                      <p className="text-xs text-gray-500 mt-1">Select this if the learner requires Special Needs education. The system will automatically assign a level based on age.</p>
+                      <p className="text-xs text-gray-500 mt-1">Select this if the learner requires Special Needs education.</p>
                     </div>
                   </label>
                 </div>
@@ -258,15 +309,16 @@ export const ApplyPage: React.FC = () => {
                   <div className="animate-fade-in p-4 bg-blue-50 border-l-4 border-blue-500 mb-6">
                     <h4 className="font-bold text-blue-900 mb-2">Automated Level Assignment</h4>
                     {formData.dob ? (
-                         <p className="text-sm text-blue-800">Based on the date of birth, the learner will be placed in: <span className="font-bold text-lg block mt-1">{autoLevel}</span></p>
+                         <p className="text-sm text-blue-800">Assigned level: <span className="font-bold text-lg block mt-1">{autoLevel}</span></p>
                     ) : (
-                         <p className="text-sm text-blue-600 italic">Please enter Date of Birth to see the assigned level.</p>
+                         <p className="text-sm text-blue-600 italic">Enter Date of Birth to see level.</p>
                     )}
                     
                     <div className="mt-4">
                         <CustomSelect 
                         label="Type of Special Needs"
                         value={formData.specialNeedsType}
+                        error={errors.specialNeedsType}
                         options={[
                             { label: 'Intellectual/Learning Difficulties', value: 'Intellectual/Learning Difficulties' },
                             { label: 'Down Syndrome', value: 'Down Syndrome' },
@@ -274,6 +326,7 @@ export const ApplyPage: React.FC = () => {
                             { label: 'Other', value: 'Other' }
                         ]}
                         onChange={(val) => handleCustomSelect('specialNeedsType', val)}
+                        required
                         />
                     </div>
                   </div>
@@ -282,6 +335,7 @@ export const ApplyPage: React.FC = () => {
                         <CustomSelect 
                         label="Mainstream Grade"
                         value={formData.grade}
+                        error={errors.grade}
                         options={gradesList.map(g => ({ label: g, value: g }))}
                         onChange={(val) => handleCustomSelect('grade', val)}
                         required
@@ -289,20 +343,19 @@ export const ApplyPage: React.FC = () => {
                     </div>
                 )}
 
-                <FormInput name="address" label="Residential Address" value={formData.address} onChange={handleChange} required />
+                <FormInput name="address" label="Residential Address" value={formData.address} onChange={handleChange} required error={errors.address} />
             </div>
           </div>
         )}
 
-        {/* ... (Steps 2-5 are identical to previous version) ... */}
         {/* Step 2: Parents */}
         {currentStep === 1 && (
           <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-6">Parent / Guardian Details</h3>
-                <FormInput name="fatherName" label="Father/Guardian Name" value={formData.fatherName} onChange={handleChange} required />
-                <FormInput name="fatherPhone" label="Phone Number" type="tel" value={formData.fatherPhone} onChange={handleChange} required />
-                <FormInput name="fatherEmail" label="Email Address" type="email" value={formData.fatherEmail} onChange={handleChange} required />
+                <FormInput name="fatherName" label="Father/Guardian Name" value={formData.fatherName} onChange={handleChange} required error={errors.fatherName} />
+                <FormInput name="fatherPhone" label="Phone Number" type="tel" value={formData.fatherPhone} onChange={handleChange} required error={errors.fatherPhone} />
+                <FormInput name="fatherEmail" label="Email Address" type="email" value={formData.fatherEmail} onChange={handleChange} required error={errors.fatherEmail} />
                 <div className="w-full h-px bg-gray-200 my-8"></div>
                 <FormInput name="motherName" label="Mother/Guardian Name" value={formData.motherName} onChange={handleChange} />
                 <FormInput name="motherPhone" label="Phone Number" type="tel" value={formData.motherPhone} onChange={handleChange} />
@@ -311,11 +364,11 @@ export const ApplyPage: React.FC = () => {
             <div>
                 <h3 className="text-lg font-bold text-gray-900 mb-6 lg:mt-0 mt-8">Emergency Contact</h3>
                 <div className="bg-red-50 p-4 border-l-4 border-red-400 mb-6 rounded-r-lg">
-                  <p className="text-xs text-red-800">Please provide a contact other than the parents.</p>
+                  <p className="text-xs text-red-800">Provide a contact other than the parents.</p>
                 </div>
-                <FormInput name="emergencyName" label="Full Name" value={formData.emergencyName} onChange={handleChange} required />
-                <FormInput name="emergencyRelationship" label="Relationship" value={formData.emergencyRelationship} onChange={handleChange} required />
-                <FormInput name="emergencyCell" label="Cell Number" type="tel" value={formData.emergencyCell} onChange={handleChange} required />
+                <FormInput name="emergencyName" label="Full Name" value={formData.emergencyName} onChange={handleChange} required error={errors.emergencyName} />
+                <FormInput name="emergencyRelationship" label="Relationship" value={formData.emergencyRelationship} onChange={handleChange} required error={errors.emergencyRelationship} />
+                <FormInput name="emergencyCell" label="Cell Number" type="tel" value={formData.emergencyCell} onChange={handleChange} required error={errors.emergencyCell} />
                 <FormInput name="emergencyWork" label="Work Contact" value={formData.emergencyWork} onChange={handleChange} />
                 <FormInput name="emergencyEmail" label="Email Address" type="email" value={formData.emergencyEmail} onChange={handleChange} />
             </div>
@@ -341,8 +394,8 @@ export const ApplyPage: React.FC = () => {
                 </div>
                 {formData.hasPreviousSchool && (
                   <div className="pl-4 border-l-2 border-gray-200 mb-8">
-                    <FormInput name="previousSchool" label="Previous School Name" value={formData.previousSchool} onChange={handleChange} />
-                    <FormInput name="highestGrade" label="Highest Grade Completed" value={formData.highestGrade} onChange={handleChange} />
+                    <FormInput name="previousSchool" label="Previous School Name" value={formData.previousSchool} onChange={handleChange} required error={errors.previousSchool} />
+                    <FormInput name="highestGrade" label="Highest Grade Completed" value={formData.highestGrade} onChange={handleChange} required error={errors.highestGrade} />
                   </div>
                 )}
              </div>
@@ -408,9 +461,9 @@ export const ApplyPage: React.FC = () => {
                   </label>
                   {formData.hasMedicalAid && (
                     <div className="pl-4 border-l-2 border-coha-500 animate-fade-in">
-                       <FormInput name="medicalAidName" label="Medical Aid Name" value={formData.medicalAidName} onChange={handleChange} />
+                       <FormInput name="medicalAidName" label="Medical Aid Name" value={formData.medicalAidName} onChange={handleChange} required error={errors.medicalAidName} />
                        <FormInput name="medicalAidOption" label="Plan Option" value={formData.medicalAidOption} onChange={handleChange} />
-                       <FormInput name="medicalAidMemberID" label="Member ID" value={formData.medicalAidMemberID} onChange={handleChange} />
+                       <FormInput name="medicalAidMemberID" label="Member ID" value={formData.medicalAidMemberID} onChange={handleChange} required error={errors.medicalAidMemberID} />
                     </div>
                   )}
                  </div>
@@ -423,10 +476,10 @@ export const ApplyPage: React.FC = () => {
           <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-2 gap-8">
              <div>
                  <h3 className="text-lg font-bold text-gray-900 mb-6">Consent & Declaration</h3>
-                 <div className={`p-5 rounded-lg border-l-4 mb-6 transition-all duration-300 ${errorField === 'consent' ? 'bg-red-50 border-red-600 error-pulse' : 'bg-red-50 border-red-500'}`}>
+                 <div className={`p-5 rounded-lg border-l-4 mb-6 transition-all duration-300 ${errors.medicalConsent ? 'bg-red-50 border-red-600' : 'bg-red-50 border-red-500'}`}>
                     <h4 className="font-bold text-red-800 mb-2">Medical Emergency Consent</h4>
                     <p className="text-sm text-gray-700 mb-4 leading-relaxed">
-                      In a critical medical situation, the school reserves the right to utilise the quickest medical service available if parents cannot be reached immediately.
+                      In a critical situation, the school reserves the right to utilise medical services if parents cannot be reached.
                     </p>
                     <label className="flex items-start gap-3 cursor-pointer">
                        <input 
@@ -437,20 +490,19 @@ export const ApplyPage: React.FC = () => {
                           className="mt-1 w-6 h-6 accent-red-600"
                         />
                        <span className="text-sm font-bold text-red-900">
-                         I, hereby agree that a medical practitioner may provide emergency treatment as may be necessary.
+                         I agree that emergency treatment may be provided.
                        </span>
                     </label>
+                    {errors.medicalConsent && <p className="text-red-700 text-xs mt-2 font-bold uppercase">{errors.medicalConsent}</p>}
                  </div>
              </div>
              <div>
                  <h3 className="text-lg font-bold text-gray-900 mb-6 lg:mt-0 mt-8">Terms & Conditions</h3>
-                 <div className={`p-5 rounded-lg border-l-4 mb-8 transition-all duration-300 ${errorField === 'consent' ? 'bg-gray-100 border-red-600 error-pulse' : 'bg-gray-50 border-gray-400'}`}>
-                    <h4 className="font-bold text-gray-900 mb-4">Terms & Conditions</h4>
+                 <div className={`p-5 rounded-lg border-l-4 mb-8 transition-all duration-300 ${errors.agreed ? 'bg-red-50 border-red-600' : 'bg-gray-50 border-gray-400'}`}>
+                    <h4 className="font-bold text-gray-900 mb-4">Declaration</h4>
                     <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600 mb-6">
-                      <li>I accept the school's curriculum and policies.</li>
-                      <li>I accept financial responsibility for all school fees.</li>
-                      <li>School fees are paid in advance.</li>
-                      <li>One month's notice is required for withdrawal.</li>
+                      <li>I accept school fees and curriculum policies.</li>
+                      <li>Fees are paid in advance.</li>
                     </ul>
                     <label className="flex items-start gap-3 cursor-pointer">
                        <input 
@@ -461,44 +513,48 @@ export const ApplyPage: React.FC = () => {
                           className="mt-1 w-6 h-6 accent-coha-900"
                         />
                        <span className="text-sm font-bold text-gray-900">
-                         I declare that the information is true and I accept the terms outlined above.
+                         I declare that information is true and accept terms.
                        </span>
                     </label>
+                    {errors.agreed && <p className="text-red-700 text-xs mt-2 font-bold uppercase">{errors.agreed}</p>}
                  </div>
-                  {shakeError && (
-                     <div className="flex items-center gap-2 text-red-600 mb-4 animate-shake justify-center bg-red-50 p-2 rounded">
-                        <AlertCircle size={18} />
-                        <span className="text-sm font-bold">Please accept both consents to proceed.</span>
-                     </div>
-                  )}
              </div>
           </div>
         )}
 
-        {/* Buttons */}
-        <div className="mt-8 flex gap-4 pt-6 border-t border-gray-100 w-full">
-           <Button 
-              type="button" 
-              variant="outline"
-              onClick={handleBack} 
-              className={`flex-1 ${currentStep === 0 ? 'invisible' : ''}`}
-            >
-              Back
-            </Button>
-            
-            {currentStep < STEPS.length - 1 ? (
-              <Button type="button" onClick={handleNext} className="flex-1 bg-coha-500 hover:bg-coha-600 border-none rounded-lg">
-                Next <ArrowRight size={18} />
-              </Button>
-            ) : (
+        {/* Action Buttons & Feedback */}
+        <div className="mt-8 flex flex-col items-center gap-6 pt-6 border-t border-gray-100 w-full">
+           {stepError && (
+              <div className={`flex items-center gap-3 text-red-600 p-4 bg-red-50 border border-red-100 w-full justify-center transition-all ${shakeError ? 'animate-shake' : ''}`}>
+                 <AlertCircle size={20} />
+                 <span className="text-sm font-bold">{stepError}</span>
+              </div>
+           )}
+
+           <div className="flex gap-4 w-full">
               <Button 
-                type="submit" 
-                disabled={loading}
-                className={`flex-1 rounded-lg border-none text-white ${shakeError ? 'animate-shake bg-red-600' : 'bg-coha-900'}`}
+                type="button" 
+                variant="outline"
+                onClick={handleBack} 
+                className={`flex-1 ${currentStep === 0 ? 'invisible' : ''}`}
               >
-                {loading ? 'Sending...' : 'Submit Application'}
+                Back
               </Button>
-            )}
+              
+              {currentStep < STEPS.length - 1 ? (
+                <Button type="button" onClick={handleNext} className="flex-1 bg-coha-500 hover:bg-coha-600 border-none rounded-lg">
+                  Next <ArrowRight size={18} />
+                </Button>
+              ) : (
+                <Button 
+                  type="submit" 
+                  disabled={loading}
+                  className={`flex-1 rounded-lg border-none text-white ${shakeError ? 'animate-shake bg-red-600' : 'bg-coha-900'}`}
+                >
+                  {loading ? 'Sending...' : 'Submit Application'}
+                </Button>
+              )}
+           </div>
         </div>
 
       </form>

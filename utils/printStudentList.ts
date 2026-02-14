@@ -19,7 +19,6 @@ const fetchImage = async (url: string): Promise<string> => {
 export const printStudentList = async (students: Student[], settings: SystemSettings | null) => {
   const doc = new jsPDF();
   
-  // Calculate Total Expected Fees per student based on settings
   let totalFees = 0;
   if (settings && settings.fees) {
       settings.fees.forEach(fee => {
@@ -31,7 +30,6 @@ export const printStudentList = async (students: Student[], settings: SystemSett
       });
   }
 
-  // --- Header ---
   const logoUrl = "https://i.ibb.co/LzYXwYfX/logo.png";
   const logoData = await fetchImage(logoUrl);
   if (logoData) {
@@ -45,24 +43,22 @@ export const printStudentList = async (students: Student[], settings: SystemSett
   
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
-  doc.text("STUDENT ENROLLMENT & FEE STATUS LIST", 40, 24);
-  doc.text(`Date: ${new Date().toLocaleDateString()}`, 40, 29);
+  doc.text("OFFICIAL STUDENT REGISTER & ACCOUNTS", 40, 24);
+  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 40, 29);
 
-  // --- Table ---
-  // Ensure all values are strings to satisfy TypeScript/jspdf-autotable
   const tableData = students.map(s => [
+      s.id || '',
       s.surname || '',
       s.firstName || '',
-      s.grade || '',
+      s.assignedClass || s.grade || s.level || 'Placement Pending',
       s.parentName || 'N/A',
-      s.fatherPhone || s.motherPhone || 'N/A',
-      `N$ 0.00`, // Paid (Mocked)
-      `N$ ${totalFees.toLocaleString()}` // Due
+      `N$ 0.00`, 
+      `N$ ${totalFees.toLocaleString()}`
   ]);
 
   autoTable(doc, {
       startY: 35,
-      head: [['Surname', 'First Name', 'Grade', 'Parent', 'Contact', 'Fees Paid', 'Fees Due']],
+      head: [['ID', 'Surname', 'First Name', 'Grade/Level', 'Parent', 'Paid', 'Due']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [0, 29, 100], fontSize: 8, fontStyle: 'bold' },
@@ -73,5 +69,5 @@ export const printStudentList = async (students: Student[], settings: SystemSett
       }
   });
 
-  doc.save("COHA_Student_List.pdf");
+  doc.save("COHA_Register.pdf");
 };
