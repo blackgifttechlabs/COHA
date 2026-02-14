@@ -1,7 +1,7 @@
 import { db, auth } from '../firebase';
-import { collection, addDoc, getDocs, getDoc, query, where, doc, updateDoc, deleteDoc, orderBy, Timestamp, setDoc, runTransaction } from 'firebase/firestore';
+import { collection, addDoc, getDocs, getDoc, query, where, doc, updateDoc, deleteDoc, orderBy, Timestamp, setDoc, runTransaction, limit, startAt, endAt } from 'firebase/firestore';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { Teacher, Student, UserRole, Application, SystemSettings, Receipt, Division, AssessmentData, SelfCareAssessment } from '../types';
+import { Teacher, Student, UserRole, Application, SystemSettings, Receipt, Division, AssessmentData, SelfCareAssessment, AssessmentDay } from '../types';
 
 // Collections
 const TEACHERS_COLLECTION = 'teachers';
@@ -14,7 +14,6 @@ const RECEIPTS_COLLECTION = 'receipts';
 const ADMIN_EMAIL = "admin@coha.com";
 const ADMIN_AUTH_PASSWORD = "111111"; 
 
-// ... (Helper functions calculateAge, determineSpecialNeedsLevel, seedAdminUser - unchanged) ...
 const calculateAge = (dobString: string): number => {
   const today = new Date();
   const birthDate = new Date(dobString);
@@ -62,7 +61,6 @@ export const seedAdminUser = async () => {
   }
 };
 
-// ... (Teacher CRUD functions - unchanged) ...
 export const addTeacher = async (name: string, subject: string, assignedClass: string) => {
   try {
     await addDoc(collection(db, TEACHERS_COLLECTION), {
@@ -122,7 +120,6 @@ export const searchTeachers = async (searchTerm: string): Promise<Teacher[]> => 
   return all.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
 };
 
-// ... (Student CRUD and ID Generation - unchanged) ...
 const generateStudentId = async (): Promise<string> => {
   const settingsRef = doc(db, SETTINGS_COLLECTION, 'general');
   try {
@@ -214,10 +211,20 @@ export const getStudentsByStatus = async (status: string): Promise<Student[]> =>
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
 };
 
+/**
+ * Updated to support Stage-based fuzzy matching.
+ * Teachers assigned to "Level 1B" will see "Level 1B - Stage 1", etc.
+ */
 export const getStudentsByAssignedClass = async (className: string): Promise<Student[]> => {
-    const q = query(collection(db, STUDENTS_COLLECTION), where("assignedClass", "==", className));
+    const q = query(collection(db, STUDENTS_COLLECTION));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+    const all = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+    
+    // Client side filtering for flexible partial matching (Base Level check)
+    return all.filter(s => {
+        if (!s.assignedClass) return false;
+        return s.assignedClass === className || s.assignedClass.startsWith(`${className} - Stage`);
+    });
 };
 
 export const getStudentById = async (id: string): Promise<Student | null> => {
@@ -229,7 +236,6 @@ export const getStudentById = async (id: string): Promise<Student | null> => {
   return null;
 };
 
-// ... (Search, Receipts, Payment logic - unchanged) ...
 export const searchStudents = async (searchTerm: string): Promise<Student[]> => {
   if (!searchTerm) return [];
   const all = await getStudents();
@@ -321,31 +327,32 @@ export const rejectPayment = async (studentId: string) => {
 
 // --- ASSESSMENT LOGIC ---
 
-// Helper to calculate Daily Percentage
+const getNormalizedDailyScore = (dayData: any): number => {
+    if (!dayData || !dayData.scores) return 0;
+    const s = dayData.scores;
+    const inputs = [
+        Number(s.numbers) || 0,
+        Number(s.reading) || 0,
+        Number(s.selfCare) || 0,
+        Number(s.behaviour) || 0,
+        Number(s.senses) || 0,
+        Number(dayData.thinkingScore) || 0,
+        Number(dayData.abcScore) || 3
+    ];
+    const sum = inputs.reduce((a, b) => a + b, 0);
+    return parseFloat((sum / inputs.length).toFixed(2));
+};
+
 export const calculateDayPercentage = (day: any) => {
     if (!day) return 0;
-    // Main areas: 5 areas * 5 max = 25
-    const mainScore = day.scores.numbers + day.scores.reading + day.scores.selfCare + day.scores.behaviour + day.scores.senses;
-    
-    // Thinking Task: Max 5 (Yes=5)
-    let thinkingScore = day.thinkingScore || 0;
-
-    // ABC: Max 5 (Positive=5)
-    // Total Average = (MainAvg + Thinking + ABC) / 3. Max is 5.
-    
-    const mainAvg = mainScore / 5;
-    const abc = day.abcScore || 0;
-    
-    const dailyAvg = (mainAvg + thinkingScore + abc) / 3;
-    
-    return Math.round((dailyAvg / 5) * 100);
+    const score = (day.dailyTotalScore !== undefined) ? Number(day.dailyTotalScore) : getNormalizedDailyScore(day);
+    return Math.round((score / 5) * 100);
 };
 
 export const saveParentAssessment = async (studentId: string, assessmentData: Omit<SelfCareAssessment, 'calculatedScore' | 'completedDate'>) => {
     const student = await getStudentById(studentId);
     if (!student || !student.assessment) return false;
 
-    // Scoring: Yes = 1, Yes with help = 0.5, No = 0
     let totalScore = 0;
     const items = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9'] as const;
     
@@ -355,7 +362,6 @@ export const saveParentAssessment = async (studentId: string, assessmentData: Om
         else if (val === 'Yes with help') totalScore += 0.5;
     });
 
-    // Max score is 9. Normalize to 5.
     const calculatedScore = parseFloat(((totalScore / 9) * 5).toFixed(2));
 
     const finalAssessment: SelfCareAssessment = {
@@ -376,86 +382,75 @@ export const saveParentAssessment = async (studentId: string, assessmentData: Om
     return true;
 };
 
-// UPDATED: Save Teacher Assessment for a specific day
 export const saveTeacherAssessmentDay = async (studentId: string, day: number, dayData: any) => {
-    const student = await getStudentById(studentId);
-    if (!student || !student.assessment) return false;
+    try {
+        const student = await getStudentById(studentId);
+        if (!student || !student.assessment) return false;
 
-    const updatedAssessment = {
-        ...student.assessment,
-        teacherAssessments: {
-            ...student.assessment.teacherAssessments,
-            [day]: {
-                ...dayData,
-                completed: true,
-                date: new Date().toISOString()
+        const dailyTotalScore = getNormalizedDailyScore(dayData);
+
+        const updatedAssessment = {
+            ...student.assessment,
+            teacherAssessments: {
+                ...student.assessment.teacherAssessments,
+                [day]: {
+                    ...dayData,
+                    dailyTotalScore: dailyTotalScore, 
+                    completed: true,
+                    date: new Date().toISOString()
+                }
             }
-        }
-    };
-    
-    await updateStudent(studentId, { assessment: updatedAssessment });
-
-    return true;
+        };
+        
+        await updateStudent(studentId, { assessment: updatedAssessment });
+        return true;
+    } catch (err) {
+        console.error("saveTeacherAssessmentDay failed:", err);
+        return false;
+    }
 };
 
-export const calculateFinalStage = async (studentId: string) => {
+export const calculateFinalStage = async (studentId: string): Promise<{ success: boolean; assignedClass?: string; error?: string }> => {
     try {
         const student = await getStudentById(studentId);
         if (!student || !student.assessment) {
-            console.error("Student or assessment missing");
-            return false;
+            return { success: false, error: "Database error: Student record missing." };
         }
 
         const assessment = student.assessment;
         let daysCount = 0;
-        let totalDailyScores = 0;
+        let teacherAggregatePoints = 0;
         
-        Object.values(assessment.teacherAssessments).forEach((day: any) => {
+        const dayEntries = Object.entries(assessment.teacherAssessments || {});
+        dayEntries.forEach(([dayNum, day]: [string, any]) => {
             if (day.completed) {
-                // Ensure numbers to prevent NaN
-                const s = day.scores || {};
-                const mainSum = (Number(s.numbers)||0) + (Number(s.reading)||0) + (Number(s.selfCare)||0) + (Number(s.behaviour)||0) + (Number(s.senses)||0);
-                const mainAvg = mainSum / 5;
-                
-                const thinking = Number(day.thinkingScore) || 0;
-                const abc = Number(day.abcScore) || 0;
-
-                const dailyAvg = (mainAvg + thinking + abc) / 3;
-                
-                totalDailyScores += dailyAvg;
+                const score = (day.dailyTotalScore !== undefined) ? Number(day.dailyTotalScore) : getNormalizedDailyScore(day);
+                teacherAggregatePoints += score;
                 daysCount++;
             }
         });
 
-        if (daysCount === 0) {
-             console.error("No completed days found");
-             return false;
+        if (daysCount < 14) {
+            return { success: false, error: `Only ${daysCount}/14 days completed.` };
         }
 
-        const teacherOverallAvg = totalDailyScores / daysCount;
-        const parentScore = Number(assessment.parentSelfCare?.calculatedScore) || 0;
-        
-        // Final Average (Weigh Parent score if exists)
-        let finalAverage = 0;
-        if (parentScore > 0) {
-            finalAverage = (teacherOverallAvg + parentScore) / 2;
-        } else {
-            finalAverage = teacherOverallAvg; 
+        const teacherAvg = teacherAggregatePoints / daysCount;
+
+        if (!assessment.parentSelfCare) {
+            return { success: false, error: "Parent report is missing." };
         }
-        
-        // Ensure finalAverage is a number, not NaN
+
+        const parentScore = Number(assessment.parentSelfCare.calculatedScore) || 0;
+        let finalAverage = (teacherAvg * 0.6) + (parentScore * 0.4);
         if (isNaN(finalAverage)) finalAverage = 0;
 
-        // Determine Stage
         let stage: 1 | 2 | 3 = 1;
         if (finalAverage >= 3.8) stage = 3;
         else if (finalAverage >= 2.4) stage = 2;
         else stage = 1;
 
-        // Determine Class Name
-        // Fallback if level is undefined
-        const levelName = student.level || student.grade || 'Special Needs';
-        const assignedClass = `${levelName} - Stage ${stage}`;
+        const baseLevel = student.level || student.grade || 'Learner';
+        const assignedClass = `${baseLevel} - Stage ${stage}`;
         
         await updateStudent(studentId, {
             assessment: { ...assessment, finalAverage, stage, isComplete: true },
@@ -464,14 +459,12 @@ export const calculateFinalStage = async (studentId: string) => {
             studentStatus: 'ENROLLED' 
         });
         
-        return assignedClass;
-    } catch (e) {
-        console.error("Error in calculateFinalStage", e);
-        return false;
+        return { success: true, assignedClass };
+    } catch (e: any) {
+        return { success: false, error: e.message };
     }
 };
 
-// ... (Rest of existing functions unchanged) ...
 export const verifyAdminPin = async (pin: string): Promise<boolean> => {
   const settings = await getSystemSettings();
   const validPin = settings ? settings.adminPin : '1111';

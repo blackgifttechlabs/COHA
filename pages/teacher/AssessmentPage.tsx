@@ -4,9 +4,10 @@ import { getStudentById, saveTeacherAssessmentDay, calculateDayPercentage, calcu
 import { Student, UserRole, AssessmentDay, ABCLog } from '../../types';
 import { Loader } from '../../components/ui/Loader';
 import { Button } from '../../components/ui/Button';
-import { ArrowLeft, CheckCircle, Lock, Calendar, Brain, Activity, ClipboardList, Plus, Trash2, X, Heart, User, AlertTriangle, PlayCircle, ArrowRight } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Calendar, Brain, Activity, ClipboardList, Plus, Trash2, X, Heart, User, AlertTriangle, PlayCircle, ArrowRight, Loader2, Clock, Sparkles } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { Toast } from '../../components/ui/Toast';
+import { CustomSelect } from '../../components/ui/CustomSelect';
 
 const THINKING_TASKS = [
     { id: 'T1', desc: 'Pile objects on top of one another' },
@@ -25,6 +26,27 @@ const THINKING_TASKS = [
     { id: 'T14', desc: 'Final Review: Overall readiness' },
 ];
 
+const PARENT_QUESTIONS = [
+    { id: 's1', text: 'Drink from a cup' },
+    { id: 's2', text: 'Feed self with a spoon' },
+    { id: 's3', text: 'Wash hands' },
+    { id: 's4', text: 'Wash and dry him/herself' },
+    { id: 's5', text: 'Dress and undress him/herself' },
+    { id: 's6', text: 'Brush teeth and hair by him/herself' },
+    { id: 's7', text: 'Go to the toilet by him/herself' },
+    { id: 's8', text: 'Assist with simple tasks around the home' },
+    { id: 's9', text: 'Can be sent around with messages' },
+];
+
+const SCORE_OPTIONS = [
+    { label: '0 - No Progress', value: '0' },
+    { label: '1 - Minimal', value: '1' },
+    { label: '2 - Emerging', value: '2' },
+    { label: '3 - Satisfactory', value: '3' },
+    { label: '4 - Good', value: '4' },
+    { label: '5 - Excellent', value: '5' },
+];
+
 interface AssessmentPageProps {
     userRole: UserRole;
     user?: any;
@@ -38,13 +60,13 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
     const [viewMode, setViewMode] = useState<'DAILY' | 'PARENT'>('DAILY');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [finalizing, setFinalizing] = useState(false);
     const [toast, setToast] = useState({ show: false, msg: '', type: 'success' as 'success' | 'error' });
     
-    // Transfer Modal State
     const [transferModalOpen, setTransferModalOpen] = useState(false);
+    const [finalSuccessModalOpen, setFinalSuccessModalOpen] = useState(false);
     const [transferClass, setTransferClass] = useState('');
 
-    // Day Form State
     const [formState, setFormState] = useState({
         numbers: 0,
         reading: 0,
@@ -55,7 +77,6 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
         abcLogs: [] as ABCLog[]
     });
 
-    // ABC Modal State
     const [isAbcModalOpen, setIsAbcModalOpen] = useState(false);
     const [newAbc, setNewAbc] = useState<Partial<ABCLog>>({
         antecedent: '',
@@ -106,7 +127,7 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
 
     const handleMainScoreChange = (field: string, val: string) => {
         const num = parseInt(val) || 0;
-        setFormState(prev => ({ ...prev, [field]: Math.min(5, Math.max(0, num)) }));
+        setFormState(prev => ({ ...prev, [field]: num }));
     };
 
     const handleAddAbcLog = () => {
@@ -141,12 +162,10 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
         if (!student || !id) return;
         setSaving(true);
 
-        // Calculate Scores
         let thinkingScore = 0;
         if (formState.thinkingResponse === 'Yes') thinkingScore = 5;
         else if (formState.thinkingResponse === 'Yes with help') thinkingScore = 2.5;
 
-        // ABC Score
         let abcScore = 0;
         if (formState.abcLogs.length > 0) {
             const totalAbc = formState.abcLogs.reduce((acc, log) => acc + (log.isPositive ? 5 : 0), 0);
@@ -175,86 +194,114 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
             abcLogs: formState.abcLogs
         };
 
-        await saveTeacherAssessmentDay(id, selectedDay, dayData);
-        const updatedStudent = await getStudentById(id);
-        setStudent(updatedStudent);
+        const success = await saveTeacherAssessmentDay(id, selectedDay, dayData);
+        
+        if (success) {
+            const updatedStudent = await getStudentById(id);
+            setStudent(updatedStudent);
+            setToast({ show: true, msg: `Day ${selectedDay} assessment saved.`, type: 'success' });
+        } else {
+            setToast({ show: true, msg: "Failed to save daily assessment.", type: 'error' });
+        }
         setSaving(false);
-        setToast({ show: true, msg: `Day ${selectedDay} Saved.`, type: 'success' });
     };
+
+    const completedDaysCount = student?.assessment?.teacherAssessments ? Object.values(student.assessment.teacherAssessments).filter((d:any) => d.completed).length : 0;
+    const isReadyToFinalize = completedDaysCount === 14;
+    const isCompleted = student?.assessment?.isComplete;
 
     const handleFinalize = async () => {
         if (!student || !id) return;
+        setFinalizing(true);
         
-        if (window.confirm("Are you sure you want to finalize this assessment? This will calculate the final stage and enroll the student into the class.")) {
-            setSaving(true);
-            try {
-                const assignedClass = await calculateFinalStage(id);
-                if (assignedClass) {
-                    const updatedStudent = await getStudentById(id);
-                    setStudent(updatedStudent);
-                    
-                    // Check for transfer
-                    if (user && user.assignedClass && assignedClass !== user.assignedClass && userRole === UserRole.TEACHER) {
-                        setTransferClass(assignedClass);
-                        setTransferModalOpen(true);
-                    } else {
-                        setToast({ show: true, msg: `Assessment Finalized! Student placed in ${assignedClass}`, type: 'success' });
-                    }
+        try {
+            const result = await calculateFinalStage(id);
+            
+            if (result.success && result.assignedClass) {
+                const updatedStudent = await getStudentById(id);
+                setStudent(updatedStudent);
+                
+                // Logic: If the student's assigned class cohort matches the teacher's cohort
+                const isMyCohort = user && user.assignedClass && result.assignedClass.startsWith(user.assignedClass);
+
+                if (isMyCohort && userRole === UserRole.TEACHER) {
+                    setFinalSuccessModalOpen(true);
+                } else if (!isMyCohort && userRole === UserRole.TEACHER) {
+                    setTransferClass(result.assignedClass);
+                    setTransferModalOpen(true);
                 } else {
-                    setToast({ show: true, msg: "Failed to finalize. Please ensure all 14 days are recorded.", type: 'error' });
+                    setToast({ show: true, msg: `Assessment Finalized! Student enrolled in ${result.assignedClass}`, type: 'success' });
                 }
-            } catch (e) {
-                console.error("Finalization failed", e);
-                setToast({ show: true, msg: "System error during finalization.", type: 'error' });
+            } else {
+                setToast({ show: true, msg: result.error || "Aggregation engine failed.", type: 'error' });
             }
-            setSaving(false);
+        } catch (e: any) {
+            setToast({ show: true, msg: `System error: ${e.message}`, type: 'error' });
+        } finally {
+            setFinalizing(false);
         }
     };
 
     if (loading || !student) return <Loader />;
 
     const isReadOnly = userRole === UserRole.ADMIN || student.assessment?.isComplete;
-    const completedDaysCount = student.assessment?.teacherAssessments ? Object.values(student.assessment.teacherAssessments).filter((d:any) => d.completed).length : 0;
-    const isReadyToFinalize = completedDaysCount === 14;
-    const isCompleted = student.assessment?.isComplete;
 
     return (
-        <div className="pb-20 relative">
+        <div className="pb-20 relative font-sans text-black">
             <Toast message={toast.msg} isVisible={toast.show} onClose={() => setToast({...toast, show: false})} variant={toast.type} />
             
-            {/* Transfer Modal */}
+            {/* Modal for Cohort Match (Finally Yours) */}
+            {finalSuccessModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4 animate-fade-in backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-md shadow-2xl border-t-8 border-green-600 rounded-none overflow-hidden text-center p-8">
+                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 text-green-600 animate-bounce">
+                            <Sparkles size={40} />
+                        </div>
+                        <h3 className="text-2xl font-black mb-2 uppercase text-green-900 tracking-tighter">Finally Yours!</h3>
+                        <p className="text-gray-600 mb-6 font-bold leading-relaxed">
+                            {student.name} has completed the observation period and is now officially a member of your class.
+                        </p>
+                        <div className="bg-green-50 border-2 border-green-200 text-green-900 font-black text-xl py-3 px-4 rounded-none mb-8">
+                            {student.assignedClass}
+                        </div>
+                        <Button fullWidth onClick={() => { setFinalSuccessModalOpen(false); navigate('/teacher/dashboard'); }}>
+                            Open Class Register
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {transferModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 animate-fade-in">
-                    <div className="bg-white w-full max-w-md shadow-2xl border-t-8 border-orange-500 rounded-lg overflow-hidden">
-                        <div className="p-8 text-center">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4 animate-fade-in backdrop-blur-sm">
+                    <div className="bg-white w-full max-w-md shadow-2xl border-t-8 border-orange-500 rounded-none overflow-hidden">
+                        <div className="p-8 text-center text-black">
                             <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600">
                                 <ArrowRight size={32} />
                             </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">Transferring Student</h3>
-                            <p className="text-gray-600 mb-4">
-                                Based on the assessment, {student.name} has been assigned to:
+                            <h3 className="text-xl font-bold mb-2 uppercase tracking-tighter">Cohort Transfer</h3>
+                            <p className="text-gray-800 mb-4 font-medium">
+                                Results indicate {student.name} belongs to a different cohort:
                             </p>
-                            <div className="bg-orange-50 border border-orange-200 text-orange-900 font-bold text-lg py-2 px-4 rounded mb-6 inline-block">
+                            <div className="bg-orange-50 border border-orange-200 text-orange-900 font-bold text-lg py-2 px-4 rounded-none mb-6 inline-block">
                                 {transferClass}
                             </div>
-                            <p className="text-xs text-gray-500 mb-6">
-                                The student will be moved from your class list to the new class register.
+                            <p className="text-xs text-gray-700 mb-6 font-bold uppercase tracking-tight">
+                                Student has been moved from your register.
                             </p>
                             <Button fullWidth onClick={() => { setTransferModalOpen(false); navigate('/teacher/dashboard'); }}>
-                                Acknowledge & Return to Dashboard
+                                Return to Dashboard
                             </Button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* ABC Log Modal */}
             {isAbcModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
                     <div className="bg-white w-full max-w-lg shadow-2xl border-t-8 border-coha-900 animate-fade-in rounded-none">
                          <div className="flex justify-between items-center p-6 border-b border-gray-100">
-                            <h3 className="text-xl font-bold text-coha-900 flex items-center gap-2">
-                                <ClipboardList size={24}/> Add ABC Log
+                            <h3 className="text-xl font-bold text-coha-900 flex items-center gap-2 uppercase tracking-tighter">
+                                <ClipboardList size={24}/> Behavioural Event
                             </h3>
                             <button onClick={() => setIsAbcModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                                 <X size={24} />
@@ -262,32 +309,32 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
                         </div>
                         <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Antecedent (A)</label>
+                                <label className="block text-[10px] font-black text-gray-500 mb-1 uppercase tracking-widest">Antecedent (A)</label>
                                 <textarea 
-                                    className="w-full p-3 border-2 border-gray-300 outline-none rounded bg-gray-50 h-20 text-sm focus:border-coha-500" 
-                                    placeholder="What happened immediately before the behaviour?"
+                                    className="w-full p-3 border-2 border-gray-300 outline-none rounded-none bg-gray-50 h-20 text-sm focus:border-coha-500 text-black" 
+                                    placeholder="Context..."
                                     value={newAbc.antecedent} 
                                     onChange={(e) => setNewAbc({...newAbc, antecedent: e.target.value})} 
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Behaviour (B)</label>
+                                <label className="block text-[10px] font-black text-gray-500 mb-1 uppercase tracking-widest">Behaviour (B)</label>
                                 <div className="flex gap-2 mb-2">
-                                    <button onClick={() => setNewAbc({...newAbc, isPositive: true})} className={`flex-1 py-1 text-xs font-bold rounded ${newAbc.isPositive ? 'bg-green-500 text-white' : 'bg-gray-100'}`}>Positive</button>
-                                    <button onClick={() => setNewAbc({...newAbc, isPositive: false})} className={`flex-1 py-1 text-xs font-bold rounded ${!newAbc.isPositive ? 'bg-red-500 text-white' : 'bg-gray-100'}`}>Negative</button>
+                                    <button onClick={() => setNewAbc({...newAbc, isPositive: true})} className={`flex-1 py-2 text-xs font-black rounded-none border-2 transition-all ${newAbc.isPositive ? 'bg-green-600 border-green-600 text-white' : 'bg-white border-gray-300 text-gray-800'}`}>Positive</button>
+                                    <button onClick={() => setNewAbc({...newAbc, isPositive: false})} className={`flex-1 py-2 text-xs font-black rounded-none border-2 transition-all ${!newAbc.isPositive ? 'bg-red-600 border-red-600 text-white' : 'bg-white border-gray-300 text-gray-800'}`}>Negative</button>
                                 </div>
                                 <textarea 
-                                    className="w-full p-3 border-2 border-gray-300 outline-none rounded bg-gray-50 h-20 text-sm focus:border-coha-500" 
-                                    placeholder="What exactly did the learner do?"
+                                    className="w-full p-3 border-2 border-gray-300 outline-none rounded-none bg-gray-50 h-20 text-sm focus:border-coha-500 text-black" 
+                                    placeholder="Observation..."
                                     value={newAbc.behaviour} 
                                     onChange={(e) => setNewAbc({...newAbc, behaviour: e.target.value})} 
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Consequence (C)</label>
+                                <label className="block text-[10px] font-black text-gray-500 mb-1 uppercase tracking-widest">Consequence (C)</label>
                                 <textarea 
-                                    className="w-full p-3 border-2 border-gray-300 outline-none rounded bg-gray-50 h-20 text-sm focus:border-coha-500" 
-                                    placeholder="What happened immediately after?"
+                                    className="w-full p-3 border-2 border-gray-300 outline-none rounded-none bg-gray-50 h-20 text-sm focus:border-coha-500 text-black" 
+                                    placeholder="Outcome..."
                                     value={newAbc.consequence} 
                                     onChange={(e) => setNewAbc({...newAbc, consequence: e.target.value})} 
                                 />
@@ -298,23 +345,22 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
                 </div>
             )}
 
-            <div className="flex items-center gap-4 mb-6">
-                <button onClick={() => navigate(-1)} className="p-2 bg-white border hover:bg-gray-50">
-                    <ArrowLeft size={20} />
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-8">
+                <button onClick={() => navigate(-1)} className="p-3 bg-white border border-gray-200 hover:bg-gray-50 text-coha-900 transition-all shadow-sm">
+                    <ArrowLeft size={24} />
                 </button>
                 <div>
-                    <h2 className="text-2xl font-bold text-coha-900">{student.name}</h2>
-                    <p className="text-gray-600">14-Day Observation Assessment</p>
+                    <h2 className="text-2xl sm:text-3xl font-black text-coha-900 uppercase tracking-tight leading-tight">{student.name}</h2>
+                    <p className="text-gray-900 font-black uppercase text-[10px] tracking-[0.2em] opacity-60">Observation Tracking Profile</p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                {/* Sidebar */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 <div className="lg:col-span-1">
-                    <div className="bg-white p-4 shadow-sm border border-gray-200 sticky top-24">
-                        <h3 className="font-bold text-gray-700 mb-4 flex items-center gap-2"><Calendar size={18}/> Assessment Days</h3>
+                    <div className="bg-white p-5 shadow-sm border border-gray-200 sticky top-24 rounded-none">
+                        <h3 className="font-black text-gray-900 mb-5 flex items-center gap-2 border-b pb-2 uppercase text-[10px] tracking-[0.2em]"><Calendar size={18}/> Calendar View</h3>
                         
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-4 sm:grid-cols-7 lg:grid-cols-4 gap-2">
                             {Array.from({ length: 14 }, (_, i) => i + 1).map((day) => {
                                 const dayData = student.assessment?.teacherAssessments?.[day];
                                 const isCompleted = dayData?.completed;
@@ -325,163 +371,269 @@ export const AssessmentPage: React.FC<AssessmentPageProps> = ({ userRole, user }
                                     <button
                                         key={day}
                                         onClick={() => handleDaySelect(day)}
-                                        className={`aspect-square flex flex-col items-center justify-center border-2 transition-all rounded-lg relative overflow-hidden
+                                        className={`aspect-square flex flex-col items-center justify-center border-2 transition-all rounded-none relative overflow-hidden
                                             ${isSelected ? 'border-coha-900 bg-coha-900 text-white scale-105 shadow-md' : 
-                                              isCompleted ? 'border-green-500 bg-green-50 text-green-700' : 
+                                              isCompleted ? 'border-green-600 bg-green-50 text-green-800' : 
                                               'border-gray-200 bg-gray-50 text-gray-400 hover:border-coha-300 hover:text-coha-500'}
                                         `}
                                     >
-                                        <span className="font-bold text-sm">{day}</span>
-                                        {isCompleted && <span className="text-[10px] font-bold">{percentage}%</span>}
+                                        <span className="font-black text-sm">{day}</span>
+                                        {isCompleted && <span className="text-[8px] font-black uppercase tracking-tighter">{percentage}%</span>}
                                     </button>
                                 );
                             })}
                         </div>
                         
-                        <div className="mt-6 border-t pt-4 space-y-2">
-                             <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Input Sources</h4>
+                        <div className="mt-8 border-t pt-5 space-y-3">
+                             <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] mb-2">Documentation</h4>
                             <button 
                                 onClick={() => setViewMode('PARENT')}
-                                className={`w-full text-left p-3 rounded-lg flex items-center gap-2 transition-colors border-2 ${viewMode === 'PARENT' ? 'bg-purple-50 border-purple-500 text-purple-900 font-bold' : 'bg-white border-transparent hover:bg-gray-50 text-gray-700'}`}
+                                className={`w-full text-left p-4 rounded-none flex items-center gap-3 transition-all border-2 ${viewMode === 'PARENT' ? 'bg-purple-50 border-purple-500 text-purple-900 font-bold' : 'bg-white border-gray-100 hover:bg-gray-50 text-gray-800 font-bold'}`}
                             >
-                                <Heart size={18} className={viewMode === 'PARENT' ? 'text-purple-600' : 'text-gray-400'} />
-                                <div className="flex-1">
-                                    <span className="block text-sm">Parent Input</span>
-                                    <span className="text-[10px] text-gray-500">Self Care (S)</span>
+                                <Heart size={20} className={viewMode === 'PARENT' ? 'text-purple-600' : 'text-gray-400'} />
+                                <div className="flex-1 min-w-0">
+                                    <span className="block text-sm truncate">Parent Report</span>
+                                    <span className="text-[9px] text-gray-500 uppercase font-black tracking-wider">Self Care Matrix</span>
                                 </div>
-                                {student.assessment?.parentSelfCare && <CheckCircle size={14} className="text-green-500" />}
+                                {student.assessment?.parentSelfCare && <CheckCircle size={14} className="text-green-600" />}
                             </button>
                         </div>
 
-                        {/* FINALIZATION ACTION AREA */}
-                        <div className="mt-6 border-t pt-4">
-                            <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Finalization</h4>
+                        <div className="mt-8 border-t pt-5">
+                            <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-[0.2em] mb-4">Enrollment</h4>
                             {isCompleted ? (
-                                <div className="text-center bg-green-100 text-green-800 p-4 rounded font-bold border border-green-200 shadow-sm">
-                                    <CheckCircle className="mx-auto mb-2" size={32} />
-                                    Assessment Closed
-                                    <span className="block text-xs mt-2 font-normal text-green-700">Assigned to:</span>
-                                    <span className="block text-lg font-bold mt-1">{student.assignedClass}</span>
+                                <div className="text-center bg-green-50 text-green-900 p-5 font-black border-2 border-green-600 shadow-sm">
+                                    <CheckCircle className="mx-auto mb-3" size={40} />
+                                    <span className="block uppercase text-[9px] tracking-widest mb-1 opacity-70">Enrollment Active</span>
+                                    <span className="block text-lg font-black mt-2 leading-tight uppercase">{student.assignedClass}</span>
                                 </div>
                             ) : (
-                                <div className="space-y-3">
-                                    <div className="text-xs text-gray-600">Days Completed: <strong>{completedDaysCount} / 14</strong></div>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-end">
+                                        <span className="text-[9px] font-black uppercase text-gray-500 tracking-wider">Progress</span>
+                                        <span className="text-sm font-black text-coha-900">{completedDaysCount} / 14</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 h-2">
+                                        <div className="bg-coha-900 h-full transition-all duration-700" style={{ width: `${(completedDaysCount/14)*100}%` }}></div>
+                                    </div>
                                     <Button 
                                         fullWidth 
                                         onClick={handleFinalize} 
-                                        disabled={!isReadyToFinalize || saving}
-                                        className={isReadyToFinalize ? "bg-green-600 hover:bg-green-700 border-none shadow-lg animate-pulse" : "opacity-50 cursor-not-allowed"}
+                                        disabled={!isReadyToFinalize || finalizing}
+                                        className={isReadyToFinalize ? "bg-green-600 hover:bg-green-700 border-none shadow-xl py-4" : "bg-gray-200 opacity-30 cursor-not-allowed py-4"}
                                     >
-                                        {saving ? 'Processing...' : (
-                                            <span className="flex items-center gap-2"><PlayCircle size={18} /> Complete Assessment</span>
+                                        {finalizing ? (
+                                            <Loader2 className="animate-spin" size={24} />
+                                        ) : (
+                                            <span className="flex items-center gap-3 font-black uppercase tracking-[0.1em] text-[10px]">
+                                                <PlayCircle size={20} /> Finalize Period
+                                            </span>
                                         )}
                                     </Button>
-                                    {!isReadyToFinalize && <p className="text-[10px] text-red-500 text-center italic">All 14 days must be recorded.</p>}
+                                    {!isReadyToFinalize && <p className="text-[9px] text-red-600 text-center font-black uppercase tracking-tight mt-2 italic">Finish all 14 days to finalize.</p>}
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                {/* Main Content */}
                 <div className="lg:col-span-3 space-y-6">
                     {viewMode === 'PARENT' ? (
-                        <div className="bg-white p-6 shadow-sm border border-purple-200 animate-fade-in relative">
-                             <h3 className="text-xl font-bold text-purple-900 mb-6 flex items-center gap-2">
-                                <User size={24} /> Parent Self-Care Assessment
-                            </h3>
+                        <div className="bg-white p-6 sm:p-8 shadow-sm border-l-8 border-purple-500 animate-fade-in relative text-black">
+                             <h3 className="text-xl sm:text-2xl font-black text-purple-900 mb-8 flex items-center gap-3 uppercase tracking-tight">
+                                <User size={28} /> Parent Self-Care Report
+                             </h3>
                             {!student.assessment?.parentSelfCare ? (
-                                <div className="text-center py-12 bg-gray-50 border border-dashed border-gray-300 rounded">
-                                    <p className="text-gray-500 font-medium">The parent has not submitted the assessment yet.</p>
+                                <div className="text-center py-20 bg-gray-50 border-2 border-dashed border-gray-300">
+                                    <AlertTriangle className="mx-auto text-gray-300 mb-4" size={48} />
+                                    <p className="text-gray-500 font-black uppercase tracking-widest text-[10px]">Awaiting parent submission</p>
                                 </div>
                             ) : (
-                                <div className="space-y-6">
-                                    <div className="bg-purple-50 p-4 rounded-lg flex justify-between items-center border border-purple-100">
-                                        <div><p className="text-sm font-bold text-purple-900">Submitted: {new Date(student.assessment.parentSelfCare.completedDate).toLocaleDateString()}</p></div>
-                                        <div><p className="text-2xl font-bold text-purple-900">{student.assessment.parentSelfCare.calculatedScore} / 5.0</p></div>
+                                <div className="space-y-8">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="bg-purple-50 p-6 border-l-4 border-purple-400">
+                                            <p className="text-[9px] font-black uppercase text-purple-600 tracking-widest mb-1">Assessment Received</p>
+                                            <p className="text-lg font-black text-purple-900">{new Date(student.assessment.parentSelfCare.completedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                        </div>
+                                        <div className="bg-purple-900 p-6 text-white shadow-lg">
+                                            <p className="text-[9px] font-black uppercase text-purple-300 tracking-widest mb-1">Parent Scoring Index</p>
+                                            <p className="text-2xl font-black">{student.assessment.parentSelfCare.calculatedScore} / 5.0</p>
+                                        </div>
                                     </div>
-                                    <div className="bg-white border border-gray-200 p-4 rounded"><p className="italic text-gray-600">"{student.assessment.parentSelfCare.comments}"</p></div>
+                                    
+                                    <div className="bg-white border-2 border-gray-100 overflow-hidden">
+                                        <div className="p-4 bg-gray-50 border-b-2 border-gray-100 font-black uppercase text-[9px] tracking-widest text-gray-600 flex justify-between">
+                                            <span>Ability Metric</span>
+                                            <span>Parent Response</span>
+                                        </div>
+                                        <div className="divide-y-2 divide-gray-50">
+                                            {PARENT_QUESTIONS.map(q => (
+                                                <div key={q.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-5 hover:bg-purple-50/30 transition-colors gap-3">
+                                                    <span className="text-black font-bold uppercase text-xs tracking-tight">{q.text}</span>
+                                                    <span className={`font-black uppercase text-[9px] tracking-widest px-4 py-2 border-2 ${
+                                                        (student.assessment?.parentSelfCare as any)[q.id] === 'Yes' ? 'bg-green-100 text-green-700 border-green-200' :
+                                                        (student.assessment?.parentSelfCare as any)[q.id] === 'No' ? 'bg-red-100 text-red-700 border-red-200' :
+                                                        'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                                    }`}>
+                                                        {(student.assessment?.parentSelfCare as any)[q.id]}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {student.assessment.parentSelfCare.comments && (
+                                        <div className="bg-gray-50 p-6 border-l-8 border-gray-300 shadow-inner">
+                                            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-3">Contextual Parent Feedback</p>
+                                            <p className="italic text-black text-lg font-medium leading-relaxed">"{student.assessment.parentSelfCare.comments}"</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
                     ) : (
                         <>
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-xl font-bold text-coha-900 flex items-center gap-2">
-                                    <span className="bg-coha-100 text-coha-900 w-8 h-8 flex items-center justify-center rounded-full text-sm">{selectedDay}</span>
-                                    Day {selectedDay} Assessment
-                                </h3>
-                                {student.assessment?.teacherAssessments?.[selectedDay]?.completed && (
-                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                                        <CheckCircle size={14} /> Completed
-                                    </span>
-                                )}
+                            <div className="bg-white border-2 border-coha-900 shadow-xl overflow-hidden mb-8">
+                                <div className="p-5 sm:p-8 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-6">
+                                    <div className="flex items-center gap-6">
+                                        <div className="bg-coha-900 text-white w-16 h-16 sm:w-20 sm:h-20 flex flex-col items-center justify-center rounded-none shadow-lg shrink-0">
+                                            <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Day</span>
+                                            <span className="text-3xl sm:text-4xl font-black leading-none">{selectedDay}</span>
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-xl sm:text-2xl font-black text-coha-900 uppercase tracking-tighter leading-none mb-1">Teacher Log</h3>
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Observation Window</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-8">
+                                        <div className="bg-gray-50 p-4 border-2 border-gray-100 flex-1 sm:flex-none flex flex-col justify-center">
+                                            <span className="block text-[8px] font-black text-gray-400 uppercase tracking-[0.3em] mb-1">Daily Log Mean</span>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-2xl font-black text-coha-900">{student.assessment?.teacherAssessments?.[selectedDay]?.dailyTotalScore || '0.0'}</span>
+                                                <span className="text-xs font-black text-gray-300">/ 5.0</span>
+                                            </div>
+                                        </div>
+                                        
+                                        {student.assessment?.teacherAssessments?.[selectedDay]?.completed ? (
+                                            <div className="bg-green-600 text-white px-6 py-4 flex items-center justify-center gap-3 shadow-lg">
+                                                <CheckCircle size={20} />
+                                                <span className="font-black uppercase text-[10px] tracking-[0.2em]">Verified Entry</span>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-yellow-500 text-white px-6 py-4 flex items-center justify-center gap-3 shadow-lg">
+                                                <Clock size={20} />
+                                                <span className="font-black uppercase text-[10px] tracking-[0.2em]">Observation Active</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Main Scores (Dropdown 0-5) */}
-                            <div className="bg-white p-6 shadow-sm border border-gray-200">
-                                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
-                                    <Activity className="text-coha-500" size={20}/> Daily Observation (Score 0-5)
+                            <div className="bg-white p-6 sm:p-8 shadow-sm border border-gray-200 rounded-none text-black font-sans">
+                                <h4 className="font-black text-gray-900 mb-8 flex items-center gap-3 uppercase tracking-[0.2em] text-[10px]">
+                                    <Activity className="text-coha-500" size={18}/> 1. CORE DOMAIN SCORING (0.0 to 5.0)
                                 </h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-5 gap-6">
                                     {['Numbers', 'Reading', 'SelfCare', 'Behaviour', 'Senses'].map((field) => (
                                         <div key={field}>
-                                            <label className="block text-xs font-bold uppercase text-gray-500 mb-1">{field}</label>
-                                            <select 
-                                                value={(formState as any)[field.charAt(0).toLowerCase() + field.slice(1)]}
-                                                onChange={(e) => !isReadOnly && handleMainScoreChange(field.charAt(0).toLowerCase() + field.slice(1), e.target.value)}
-                                                className="w-full p-2 border-2 border-gray-300 focus:border-coha-500 font-bold text-center text-lg rounded-none bg-gray-50"
-                                                disabled={isReadOnly}
-                                            >
-                                                {[0, 1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
-                                            </select>
+                                            <label className="block text-[9px] font-black text-gray-400 tracking-widest mb-2 uppercase">{field}</label>
+                                            <CustomSelect 
+                                                value={String((formState as any)[field.charAt(0).toLowerCase() + field.slice(1)])}
+                                                onChange={(val) => !isReadOnly && handleMainScoreChange(field.charAt(0).toLowerCase() + field.slice(1), val)}
+                                                options={SCORE_OPTIONS}
+                                                placeholder="Score"
+                                                className="mb-0"
+                                            />
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            {/* Thinking Task */}
-                             <div className="bg-white p-6 shadow-sm border border-gray-200">
-                                <h4 className="font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
-                                    <Brain className="text-purple-500" size={20}/> Learn to Think
+                             <div className="bg-white p-6 sm:p-8 shadow-sm border border-gray-200 rounded-none text-black">
+                                <h4 className="font-black text-gray-900 mb-6 flex items-center gap-3 uppercase tracking-[0.2em] text-[10px]">
+                                    <Brain className="text-purple-600" size={18}/> 2. COGNITIVE: LEARN TO THINK
                                 </h4>
-                                <p className="mb-4">{THINKING_TASKS[selectedDay - 1].desc}</p>
-                                <div className="flex gap-4">
+                                <div className="p-6 sm:p-8 bg-purple-50 border-l-8 border-purple-600 mb-8 shadow-inner">
+                                    <p className="text-lg sm:text-xl font-black text-purple-900 leading-[1.2] uppercase tracking-tighter">{THINKING_TASKS[selectedDay - 1].desc}</p>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-3">
                                     {['Yes', 'Yes with help', 'No'].map(opt => (
-                                        <button key={opt} onClick={() => !isReadOnly && setFormState(prev => ({...prev, thinkingResponse: opt}))} className={`flex-1 py-3 border-2 font-bold ${formState.thinkingResponse === opt ? 'bg-purple-600 text-white' : 'bg-white'}`} disabled={isReadOnly}>{opt}</button>
+                                        <button 
+                                            key={opt} 
+                                            onClick={() => !isReadOnly && setFormState(prev => ({...prev, thinkingResponse: opt}))} 
+                                            className={`flex-1 py-4 sm:py-6 border-4 font-black uppercase tracking-[0.1em] text-[10px] transition-all ${formState.thinkingResponse === opt ? 'bg-purple-600 border-purple-600 text-white shadow-2xl translate-y-[-4px]' : 'bg-white border-gray-200 text-gray-500 hover:border-purple-300 hover:text-purple-900'}`} 
+                                            disabled={isReadOnly}
+                                        >
+                                            {opt}
+                                        </button>
                                     ))}
                                 </div>
                             </div>
                             
-                            {/* ABC Logs */}
-                            <div className="bg-white p-6 shadow-sm border border-gray-200">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h4 className="font-bold text-gray-800 flex gap-2"><ClipboardList className="text-orange-500"/> ABC Logs</h4>
-                                    {!isReadOnly && !isCompleted && <Button onClick={() => setIsAbcModalOpen(true)} className="py-1 px-3 text-sm"><Plus size={16}/> Add</Button>}
+                            <div className="bg-white p-6 sm:p-8 shadow-sm border border-gray-200 rounded-none text-black">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 border-b-2 border-gray-100 pb-5 gap-4">
+                                    <h4 className="font-black text-gray-900 flex items-center gap-3 uppercase tracking-[0.2em] text-[10px]">
+                                        <ClipboardList className="text-orange-600" size={18}/> 3. BEHAVIOURAL EVENTS (ABC)
+                                    </h4>
+                                    {!isReadOnly && !isCompleted && (
+                                        <Button onClick={() => setIsAbcModalOpen(true)} className="w-full sm:w-auto py-3 px-8 text-[10px] font-black uppercase tracking-[0.2em] border-4 border-coha-900 hover:bg-coha-900 shadow-md">
+                                            <Plus size={16}/> New Entry
+                                        </Button>
+                                    )}
                                 </div>
-                                <div className="space-y-4">
+                                <div className="space-y-8">
                                     {formState.abcLogs.map(log => (
-                                        <div key={log.id} className={`border p-3 rounded-lg ${log.isPositive ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-red-500'}`}>
-                                            <div className="flex justify-between font-bold text-xs uppercase mb-2">
-                                                <span>{log.time}</span>
-                                                <span className={log.isPositive ? 'text-green-600' : 'text-red-600'}>{log.isPositive ? 'Positive' : 'Negative'}</span>
+                                        <div key={log.id} className={`p-1 border-4 transition-all shadow-lg ${log.isPositive ? 'border-green-600' : 'border-red-600'}`}>
+                                            <div className={`p-4 sm:p-6 ${log.isPositive ? 'bg-green-50' : 'bg-red-50'}`}>
+                                                <div className="flex justify-between font-black text-[9px] tracking-[0.3em] uppercase mb-6 border-b border-black/5 pb-2">
+                                                    <span className="text-gray-500">{log.time}</span>
+                                                    <span className={log.isPositive ? 'text-green-700' : 'text-red-700'}>{log.isPositive ? 'Positive Construct' : 'Negative Reaction'}</span>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 text-black">
+                                                    <div>
+                                                        <span className="block text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2 opacity-60">Antecedent (A)</span>
+                                                        <p className="font-bold text-sm leading-relaxed">{log.antecedent}</p>
+                                                    </div>
+                                                    <div className="bg-white/40 p-3 shadow-inner">
+                                                        <span className="block text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2 opacity-60">Behaviour (B)</span>
+                                                        <p className="font-black text-sm leading-relaxed">{log.behaviour}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="block text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2 opacity-60">Consequence (C)</span>
+                                                        <p className="font-bold text-sm leading-relaxed">{log.consequence}</p>
+                                                    </div>
+                                                </div>
+                                                {!isReadOnly && (
+                                                    <button onClick={() => removeAbcLog(log.id)} className="mt-6 text-red-600 font-black uppercase text-[8px] tracking-widest hover:underline flex items-center gap-2 border-2 border-red-100 px-3 py-1 hover:bg-white transition-all">
+                                                        <Trash2 size={12}/> Clear Log
+                                                    </button>
+                                                )}
                                             </div>
-                                            <div className="grid grid-cols-1 gap-1 text-sm bg-gray-50 p-2 rounded">
-                                                <p><span className="font-bold text-gray-500 w-6 inline-block">A:</span> {log.antecedent}</p>
-                                                <p><span className="font-bold text-coha-900 w-6 inline-block">B:</span> {log.behaviour}</p>
-                                                <p><span className="font-bold text-gray-500 w-6 inline-block">C:</span> {log.consequence}</p>
-                                            </div>
-                                            {!isReadOnly && <button onClick={() => removeAbcLog(log.id)} className="text-red-400 text-xs mt-2 underline">Remove</button>}
                                         </div>
                                     ))}
-                                    {formState.abcLogs.length === 0 && <p className="text-center text-gray-400 italic">No logs recorded.</p>}
+                                    {formState.abcLogs.length === 0 && (
+                                        <div className="py-20 text-center bg-gray-50 border-4 border-dashed border-gray-200">
+                                            <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-[10px]">No active logs recorded</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
                             {!isReadOnly && !isCompleted && (
-                                <div className="flex justify-end pt-4">
-                                    <Button onClick={handleSaveDay} disabled={saving} className="w-full md:w-auto px-8 py-4 text-lg">
-                                        {saving ? 'Saving...' : `Complete Day ${selectedDay}`}
+                                <div className="flex justify-end pt-10">
+                                    <Button onClick={handleSaveDay} disabled={saving} className="w-full md:w-auto px-16 py-6 text-sm font-black uppercase tracking-[0.2em] bg-coha-900 text-white flex items-center gap-5 shadow-2xl transition-all hover:translate-y-[-4px] active:scale-95">
+                                        {saving ? (
+                                            <>
+                                                <Loader2 className="animate-spin" size={24} />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={24} />
+                                                Save Day {selectedDay} Entry
+                                            </>
+                                        )}
                                     </Button>
                                 </div>
                             )}
