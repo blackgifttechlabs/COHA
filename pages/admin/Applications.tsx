@@ -180,8 +180,8 @@ Circle of Hope Academy`;
                         <div className="w-24 h-24 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-6">
                            <X size={48} />
                         </div>
-                        <h3 className="text-2xl font-black uppercase text-red-800 tracking-tight mb-2">Verification Failed</h3>
-                        <p className="text-gray-500 font-bold text-sm uppercase mb-8">Receipt not found in system.</p>
+                        <h3 className="text-2xl font-black uppercase text-red-800 tracking-tight mb-2">Payment Verification Failed</h3>
+                        <p className="text-gray-500 font-bold text-sm uppercase mb-8">Receipt number invalid.</p>
                       </div>
                     )}
 
@@ -190,14 +190,14 @@ Circle of Hope Academy`;
                             <Button fullWidth onClick={() => {
                                 setEmailModalOpen(false);
                                 navigate(`/admin/assessment/${verifyResult.student?.id}`);
-                            }} className="bg-coha-900 border-none py-4 text-xs font-black uppercase tracking-widest shadow-lg">
-                                <Brain size={18} /> Start Assessment Process <ArrowRight size={18} />
+                            }} className="bg-coha-900 border-none py-4 text-xs font-black uppercase tracking-widest shadow-lg hover-pop">
+                                <Brain size={18} /> Open Assessment Form <ArrowRight size={18} />
                             </Button>
                         )}
-                        <Button fullWidth variant="outline" onClick={() => finalizeVerification(true)} className="py-4 text-xs font-black uppercase tracking-widest">
-                            <Mail size={18} /> Email Confirmation to Parent
+                        <Button fullWidth variant="outline" onClick={() => finalizeVerification(true)} className="py-4 text-xs font-black uppercase tracking-widest hover-pop">
+                            <Mail size={18} /> Send Email To Parent
                         </Button>
-                        <button onClick={() => setEmailModalOpen(false)} className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-4 hover:text-gray-600">Close Window</button>
+                        <button onClick={() => setEmailModalOpen(false)} className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-4 hover:text-gray-600">Close</button>
                     </div>
                 </div>
             </div>
@@ -206,35 +206,35 @@ Circle of Hope Academy`;
 
       <div className="mb-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-            <h2 className="text-2xl font-bold text-coha-900">Admission Management</h2>
-            <p className="text-gray-600">Handle applications, check payments, and manage receipts.</p>
+            <h2 className="text-2xl font-bold text-coha-900">Admission Portal</h2>
+            <p className="text-gray-600">Check applications and verify payments.</p>
         </div>
         <div className="flex flex-wrap bg-white shadow-sm border border-gray-200">
             <button onClick={() => setViewMode('APPLICATIONS')} className={`px-4 py-2 text-sm font-bold uppercase flex items-center gap-2 ${viewMode === 'APPLICATIONS' ? 'bg-coha-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                Applications {counts.pendingApps > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{counts.pendingApps}</span>}
+                New Apps {counts.pendingApps > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{counts.pendingApps}</span>}
             </button>
-            <button onClick={() => setViewMode('PENDING_PAYMENT')} className={`px-4 py-2 text-sm font-bold uppercase ${viewMode === 'PENDING_PAYMENT' ? 'bg-coha-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Pending Payment</button>
+            <button onClick={() => setViewMode('PENDING_PAYMENT')} className={`px-4 py-2 text-sm font-bold uppercase ${viewMode === 'PENDING_PAYMENT' ? 'bg-coha-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Payment Required</button>
             <button onClick={() => setViewMode('VERIFICATION')} className={`px-4 py-2 text-sm font-bold uppercase flex items-center gap-2 ${viewMode === 'VERIFICATION' ? 'bg-coha-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
-                Payment Verification {counts.pendingVerifications > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{counts.pendingVerifications}</span>}
+                Verify {counts.pendingVerifications > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{counts.pendingVerifications}</span>}
             </button>
-            <button onClick={() => setViewMode('RECEIPTS')} className={`px-4 py-2 text-sm font-bold uppercase ${viewMode === 'RECEIPTS' ? 'bg-coha-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Receipt Records</button>
+            <button onClick={() => setViewMode('RECEIPTS')} className={`px-4 py-2 text-sm font-bold uppercase ${viewMode === 'RECEIPTS' ? 'bg-coha-900 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>Receipt Master</button>
         </div>
       </div>
 
       {viewMode === 'RECEIPTS' ? (
           <div className="animate-fade-in grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-1 bg-white p-6 shadow-sm border border-gray-200 h-fit">
-                  <h3 className="font-bold text-lg mb-4 text-xs font-black uppercase tracking-widest text-gray-400">Add New Receipt</h3>
+                  <h3 className="font-bold text-lg mb-4 text-xs font-black uppercase tracking-widest text-gray-400">Add School Receipt</h3>
                   <div className="space-y-4">
-                      <Input label="Receipt Number" value={newReceiptNumber} onChange={(e) => setNewReceiptNumber(e.target.value)} placeholder="e.g. R-10029" />
+                      <Input label="Receipt #" value={newReceiptNumber} onChange={(e) => setNewReceiptNumber(e.target.value)} placeholder="e.g. R-10029" />
                       <Input label="Amount (N$)" value={newReceiptAmount} onChange={(e) => setNewReceiptAmount(e.target.value)} placeholder="300.00" />
-                      <Button fullWidth onClick={handleAddReceipt} disabled={loading}>
-                          <Plus size={20} /> Add Receipt
+                      <Button fullWidth onClick={handleAddReceipt} disabled={loading} className="hover-pop">
+                          <Plus size={20} /> Register Receipt
                       </Button>
                   </div>
               </div>
               <div className="lg:col-span-2 bg-white shadow-sm border border-gray-200">
-                  <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 text-xs font-black uppercase tracking-widest">Available Receipt Records</div>
+                  <div className="p-4 border-b bg-gray-50 font-bold text-gray-700 text-xs font-black uppercase tracking-widest">Available Receipt Bank</div>
                   <div className="overflow-x-auto max-h-[600px]">
                     <table className="w-full text-left">
                         <thead className="bg-white text-xs font-bold uppercase text-gray-600 sticky top-0">
@@ -249,9 +249,9 @@ Circle of Hope Academy`;
                             {receipts.map((receipt) => (
                                 <tr key={receipt.id} className={receipt.isUsed ? 'bg-gray-100 opacity-70' : ''}>
                                     <td className="px-6 py-4 font-mono font-bold text-coha-900">{receipt.number}</td>
-                                    <td className="px-6 py-4 text-gray-800">N$ {receipt.amount}</td>
+                                    <td className="px-6 py-4 text-gray-800 font-bold">N$ {receipt.amount}</td>
                                     <td className="px-6 py-4">
-                                        {receipt.isUsed ? <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-1">USED BY {receipt.usedByStudentId}</span> : <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 uppercase tracking-wider">Available</span>}
+                                        {receipt.isUsed ? <span className="text-[10px] font-black text-gray-500 bg-gray-200 px-2 py-1 uppercase">Allocated</span> : <span className="text-[10px] font-black text-green-600 bg-green-100 px-2 py-1 uppercase tracking-wider">Unused</span>}
                                     </td>
                                     <td className="px-6 py-4">{!receipt.isUsed && <button onClick={() => handleDeleteReceipt(receipt.id!)} className="text-red-400 hover:text-red-600"><Trash2 size={16}/></button>}</td>
                                 </tr>
@@ -262,32 +262,48 @@ Circle of Hope Academy`;
               </div>
           </div>
       ) : (
-          /* Applications / Verification Tables */
           <div className="bg-white border border-gray-200 shadow-sm animate-fade-in">
              <div className="p-4 border-b border-gray-200">
                 <div className="relative max-w-md">
                     <Search className="absolute left-3 top-3 text-gray-400" size={20} />
-                    <input className="w-full pl-10 pr-4 py-2 border border-gray-300 outline-none" placeholder="Search records..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input className="w-full pl-10 pr-4 py-2 border border-gray-300 outline-none" placeholder="Search students..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
              </div>
              <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                    <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-600">
+                    <thead className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
                         <tr>
+                            <th className="px-6 py-4">ID</th>
                             <th className="px-6 py-4">Student</th>
-                            {viewMode === 'VERIFICATION' ? <th className="px-6 py-4">Receipt #</th> : <th className="px-6 py-4">Grade/Level</th>}
-                            <th className="px-6 py-4">Parent Name</th>
+                            {viewMode === 'VERIFICATION' ? <th className="px-6 py-4">Receipt #</th> : viewMode === 'PENDING_PAYMENT' ? <th className="px-6 py-4">Portal PIN</th> : <th className="px-6 py-4">Grade/Level</th>}
+                            <th className="px-6 py-4">Parent</th>
                             <th className="px-6 py-4">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {(viewMode === 'APPLICATIONS' ? filteredApps : viewMode === 'PENDING_PAYMENT' ? pendingPaymentList : verificationList).map((item: any) => (
-                            <tr key={item.id} className="hover:bg-gray-50">
+                            <tr key={item.id} className="hover:bg-gray-50 group">
+                                <td className="px-6 py-4 font-mono text-xs text-gray-400">{item.id}</td>
                                 <td className="px-6 py-4 font-bold text-coha-900">{item.firstName} {item.surname || item.name}</td>
-                                <td className="px-6 py-4 font-mono">{viewMode === 'VERIFICATION' ? item.receiptNumber : (item.grade || item.level)}</td>
-                                <td className="px-6 py-4">{item.parentName || (item.fatherName || item.motherName)}</td>
+                                <td className="px-6 py-4 font-mono font-bold">
+                                    {viewMode === 'VERIFICATION' ? (
+                                        <span className="text-blue-600">{item.receiptNumber}</span>
+                                    ) : viewMode === 'PENDING_PAYMENT' ? (
+                                        <div className="flex items-center gap-2">
+                                            <Key size={12} className="text-gray-400" />
+                                            <span className="text-coha-500 font-black">{item.parentPin}</span>
+                                        </div>
+                                    ) : (
+                                        item.grade || item.level
+                                    )}
+                                </td>
+                                <td className="px-6 py-4 text-xs font-bold text-gray-600">{item.parentName || (item.fatherName || item.motherName)}</td>
                                 <td className="px-6 py-4">
-                                    {viewMode === 'VERIFICATION' ? <Button onClick={() => handleVerifyClick(item)} className="py-1 px-3 text-sm">Verify</Button> : <button onClick={() => navigate(viewMode === 'APPLICATIONS' ? `/admin/applications/${item.id}` : `/admin/students/${item.id}`)} className="text-coha-500 font-bold hover:underline">View Profile</button>}
+                                    {viewMode === 'VERIFICATION' ? (
+                                        <Button onClick={() => handleVerifyClick(item)} className="py-1 px-4 text-[10px] font-black uppercase tracking-widest hover-pop">Verify Now</Button>
+                                    ) : (
+                                        <button onClick={() => navigate(viewMode === 'APPLICATIONS' ? `/admin/applications/${item.id}` : `/admin/students/${item.id}`)} className="text-coha-500 font-bold hover:underline uppercase text-[10px] tracking-widest">Profile</button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

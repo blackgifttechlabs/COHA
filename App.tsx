@@ -43,6 +43,7 @@ const AppLayout: React.FC<{
           onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
           role={role}
           userName={user?.name}
+          onLogout={onLogout}
         />
         <main className="flex-1 p-5 overflow-y-auto">
           {children}
