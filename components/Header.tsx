@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, Bell, ChevronDown, Search, LogOut, User, Settings } from 'lucide-react';
 import { UserRole } from '../types';
+import { getSystemSettings } from '../services/dataService';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -11,6 +12,17 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onMenuClick, role, userName, onLogout }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [schoolName, setSchoolName] = useState('Circle of Hope Academy');
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const settings = await getSystemSettings();
+      if (settings?.schoolName) {
+        setSchoolName(settings.schoolName);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   return (
     <header className="bg-white/90 backdrop-blur-md border-b border-gray-200 h-20 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 transition-all duration-300 shadow-sm">
@@ -25,28 +37,14 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, role, userName, onL
 
         {/* Brand - Enhanced visual */}
         <div className="flex items-center gap-4 group cursor-default">
-           <div className="w-10 h-10 bg-coha-900 rounded-none flex items-center justify-center text-white shadow-lg transform group-hover:rotate-12 transition-transform duration-300 ease-out">
-              <span className="font-archivo text-xl">C</span>
-           </div>
            <div className="hidden md:block">
-              <h1 className="text-xl font-archivo font-bold text-gray-900 leading-none tracking-tighter group-hover:text-coha-700 transition-colors uppercase">COHA</h1>
-              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.15em] mt-1 font-sans">Portal & Management</p>
+              <h1 className="text-xl font-archivo font-bold text-gray-900 leading-none tracking-tighter group-hover:text-coha-700 transition-colors uppercase">{schoolName}</h1>
            </div>
         </div>
       </div>
 
       {/* Right Section: Actions & Profile */}
       <div className="flex items-center gap-4 sm:gap-6">
-
-        {/* Search Bar - Expandable */}
-        <div className="hidden md:flex items-center relative group">
-            <Search size={18} className="absolute left-3.5 text-gray-400 group-focus-within:text-coha-500 transition-colors" />
-            <input
-                type="text"
-                placeholder="Search..."
-                className="pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-none text-sm font-medium text-gray-700 focus:outline-none focus:ring-4 focus:ring-coha-500/10 focus:border-coha-500 w-40 transition-all duration-300 focus:w-64 placeholder-gray-400"
-            />
-        </div>
 
         {/* Notifications */}
         <button className="relative p-2.5 text-gray-500 hover:text-coha-600 transition-all rounded-full hover:bg-blue-50 group active:scale-95">
@@ -63,8 +61,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuClick, role, userName, onL
                 className={`flex items-center gap-3 pl-2 pr-1 py-1.5 rounded-none transition-all border ${isProfileOpen ? 'bg-gray-50 border-gray-200 ring-2 ring-gray-100' : 'bg-transparent border-transparent hover:bg-gray-50 hover:border-gray-200'} group`}
             >
                 <div className="text-right hidden sm:block leading-tight">
-                    <p className="text-sm font-bold text-gray-800 group-hover:text-coha-900 transition-colors font-archivo uppercase tracking-wide">{userName || 'User'}</p>
-                    <p className="text-[10px] text-coha-500 font-extrabold uppercase tracking-wider">{role}</p>
+                    <p className="text-sm font-bold text-gray-800 group-hover:text-coha-900 transition-colors font-archivo uppercase tracking-wide">{role}</p>
+                    <p className="text-[10px] text-coha-500 font-extrabold uppercase tracking-wider">{userName || 'User'}</p>
                 </div>
                 <div className="w-10 h-10 bg-gradient-to-br from-coha-900 to-blue-700 text-white rounded-none flex items-center justify-center shadow-md ring-2 ring-white group-hover:ring-blue-100 transition-all">
                     <span className="font-archivo text-lg">{userName ? userName.charAt(0).toUpperCase() : 'U'}</span>
