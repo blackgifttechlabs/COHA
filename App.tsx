@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { ApplyPage } from './pages/ApplyPage';
+import { SchoolTour } from './pages/SchoolTour';
 import { AdminDashboard } from './pages/admin/Dashboard';
 import { TeachersPage } from './pages/admin/Teachers';
 import { StudentsPage } from './pages/admin/Students';
@@ -110,6 +111,7 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/apply" element={<ApplyPage />} />
+          <Route path="/tour" element={<SchoolTour />} />
           <Route path="/login" element={<LoginPage onLogin={handleLogin} showToast={showToast} />} />
 
           {/* Admin Routes */}
