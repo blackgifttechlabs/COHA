@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Users, GraduationCap, LogOut, X, FileText, Settings, Activity, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, LogOut, X, FileText, Settings, Activity, ClipboardList, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
 import { UserRole } from '../types';
 import { getPendingActionCounts } from '../services/dataService';
 
@@ -13,6 +13,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogout }) => {
   const [badgeCount, setBadgeCount] = useState(0);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     // Only fetch counts if Admin
@@ -52,9 +53,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogou
   if (role === UserRole.ADMIN) links = adminLinks;
   if (role === UserRole.TEACHER) links = teacherLinks;
 
-  const sidebarClasses = `fixed inset-y-0 left-0 z-50 w-72 bg-coha-900 text-white transform transition-transform duration-300 ease-in-out flex flex-col h-full ${
+  const sidebarWidth = isCollapsed ? 'w-20' : 'w-72';
+
+  const sidebarClasses = `fixed inset-y-0 left-0 z-50 bg-coha-900 text-white transform transition-all duration-700 ease-in-out flex flex-col h-full ${
     isOpen ? 'translate-x-0' : '-translate-x-full'
-  } lg:translate-x-0 lg:static shadow-xl`;
+  } lg:translate-x-0 lg:static shadow-xl ${sidebarWidth}`;
 
   return (
     <>
@@ -67,22 +70,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogou
       )}
 
       <div className={sidebarClasses}>
-        <div className="flex flex-col items-center justify-center p-6 border-b border-coha-800 shrink-0 text-center relative">
+        {/* Collapse Toggle Button */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden lg:flex absolute -right-4 top-8 bg-coha-500 text-white rounded-full p-1.5 shadow-md z-50 hover:bg-coha-400 transition-colors"
+        >
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+
+        <div className={`flex items-center p-6 border-b border-coha-800 shrink-0 relative transition-all duration-700 ${isCollapsed ? 'justify-center px-2' : 'justify-start gap-3'}`}>
             <button onClick={onClose} className="lg:hidden text-white absolute top-4 right-4">
                 <X size={24} />
             </button>
-            <div className="bg-white p-2 rounded-full mb-3">
+            <div className="bg-white p-1.5 rounded-full shrink-0">
                 <img 
                     src="https://i.ibb.co/LzYXwYfX/logo.png" 
                     alt="COHA Logo" 
-                    className="w-12 h-12 object-contain"
+                    className="w-10 h-10 object-contain"
                 />
             </div>
-            <h1 className="text-lg font-bold tracking-tight leading-tight">Circle of Hope Academy</h1>
-            <p className="text-[10px] uppercase tracking-widest text-coha-300 font-bold mt-1">Accessible Education for All</p>
+            <div className={`flex flex-col whitespace-nowrap overflow-hidden transition-all duration-700 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[300px] opacity-100'}`}>
+                <h1 className="text-lg font-bold tracking-tight leading-tight text-white">Circle of Hope</h1>
+                <h1 className="text-lg font-bold tracking-tight leading-tight text-white">Academy</h1>
+            </div>
         </div>
 
-        <nav className="mt-4 px-4 flex-1 overflow-y-auto">
+        <nav className="mt-4 px-3 flex-1 overflow-y-auto overflow-x-hidden">
           <ul className="space-y-2">
             {links.map((link) => (
               <li key={link.path}>
@@ -90,22 +103,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogou
                   to={link.path}
                   onClick={() => window.innerWidth < 1024 && onClose()}
                   className={({ isActive }) =>
-                    `flex items-center justify-between px-4 py-3 transition-colors ${
+                    `flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-lg transition-all duration-700 relative ${
                       isActive 
-                        ? 'bg-coha-500 text-white font-semibold border-l-4 border-white' 
-                        : 'text-gray-300 hover:bg-coha-800 hover:text-white'
+                        ? 'bg-coha-500 text-white font-semibold' 
+                        : 'text-white hover:bg-coha-800'
                     }`
                   }
+                  title={isCollapsed ? link.label : undefined}
                 >
                   <div className="flex items-center gap-3">
-                    {link.icon}
-                    <span>{link.label}</span>
+                    <div className="shrink-0 text-white">{link.icon}</div>
+                    <span className={`whitespace-nowrap text-white transition-all duration-700 overflow-hidden ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'}`}>
+                      {link.label}
+                    </span>
                   </div>
                   {/* Badge */}
-                  {(link as any).badge > 0 && (
-                     <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                  {!isCollapsed && (link as any).badge > 0 && (
+                     <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
                         {(link as any).badge}
                      </span>
+                  )}
+                  {isCollapsed && (link as any).badge > 0 && (
+                     <span className="absolute top-2 right-2 bg-red-500 w-2.5 h-2.5 rounded-full"></span>
                   )}
                 </NavLink>
               </li>
@@ -116,10 +135,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, role, onLogou
         <div className="w-full p-4 border-t border-coha-800 shrink-0">
           <button 
             onClick={onLogout}
-            className="flex items-center gap-3 px-4 py-3 text-red-300 hover:text-white hover:bg-coha-800 w-full transition-colors"
+            className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-3 text-white hover:bg-coha-800 rounded-lg w-full transition-all duration-700`}
+            title={isCollapsed ? 'Logout' : undefined}
           >
-            <LogOut size={20} />
-            <span>Logout</span>
+            <div className="shrink-0 text-white"><LogOut size={20} /></div>
+            <span className={`whitespace-nowrap text-white transition-all duration-700 overflow-hidden ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'}`}>
+              Logout
+            </span>
           </button>
         </div>
       </div>
