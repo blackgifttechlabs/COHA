@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApplyButton, PortalButton } from './ui/FancyButtons';
 
 const HERO_IMAGES = [
   "https://i.ibb.co/VcnkNVS3/hero.jpg",
@@ -10,17 +9,12 @@ const HERO_IMAGES = [
 export const Hero: React.FC = () => {
   const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [flip, setFlip] = useState(false);
   const [animationKey, setAnimationKey] = useState(0);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setFlip(true);
-      setTimeout(() => {
-        setCurrentImageIndex(prev => (prev + 1) % HERO_IMAGES.length);
-        setFlip(false);
-        setAnimationKey(prev => prev + 1);
-      }, 2000);
+      setCurrentImageIndex(prev => (prev + 1) % HERO_IMAGES.length);
+      setAnimationKey(prev => prev + 1);
     }, 5000);
     return () => clearInterval(interval);
   }, []);
@@ -30,7 +24,7 @@ export const Hero: React.FC = () => {
     // Height uses dvh (Dynamic Viewport Height) for better mobile browser support
     <section
       id="landing-hero"
-      className="relative w-full perspective-container bg-black overflow-hidden mt-16 md:mt-20"
+      className="relative w-full bg-black overflow-hidden mt-16 md:mt-20"
       style={{ height: 'calc(100dvh - 4rem)', minHeight: '500px' }}
     >
       <style>{`
@@ -41,19 +35,19 @@ export const Hero: React.FC = () => {
         }
       `}</style>
 
-      {/* Next Image (Bottom Layer) */}
-      <div
-        className="absolute inset-0 w-full h-full bg-cover bg-center sm:bg-top z-0"
-        style={{ backgroundImage: `url(${HERO_IMAGES[(currentImageIndex + 1) % HERO_IMAGES.length]})` }}
-      />
-
-      {/* Current Image (Flipping Top Layer) */}
-      <div
-        className={`absolute inset-0 w-full h-full bg-cover bg-center sm:bg-top z-10 origin-left ${flip ? 'book-page-flip' : ''}`}
-        style={{ backgroundImage: `url(${HERO_IMAGES[currentImageIndex]})` }}
-      >
-        <div className="absolute inset-0 bg-black/10" />
-      </div>
+      {/* Sliding Images */}
+      {HERO_IMAGES.map((img, idx) => (
+        <div
+          key={idx}
+          className="absolute inset-0 w-full h-full bg-cover bg-center sm:bg-top transition-transform duration-1000 ease-in-out"
+          style={{
+            backgroundImage: `url(${img})`,
+            transform: `translateX(${(idx - currentImageIndex) * 100}%)`,
+          }}
+        >
+          <div className="absolute inset-0 bg-black/10" />
+        </div>
+      ))}
 
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-coha-900 via-black/50 to-transparent z-20 pointer-events-none" />
@@ -85,9 +79,16 @@ export const Hero: React.FC = () => {
               We provide a supportive environment where every child's potential is recognized and nurtured.
             </p>
 
-            <div className="fade-in-up-delay-2 flex flex-col sm:flex-row gap-4 sm:gap-8 items-center w-full sm:w-auto scale-90 sm:scale-100 origin-bottom pb-4">
-              <PortalButton onClick={() => navigate('/login')} />
-              <ApplyButton onClick={() => navigate('/apply')} />
+            <div className="fade-in-up-delay-2 flex flex-col sm:flex-row gap-4 sm:gap-6 items-center w-full sm:w-auto scale-90 sm:scale-100 origin-bottom pb-4">
+              <button className="button-custom type1 btn-portal" onClick={() => navigate('/login')}>
+                <span className="btn-txt">Portal</span>
+              </button>
+              <button className="button-custom type1 btn-apply" onClick={() => navigate('/apply')}>
+                <span className="btn-txt">Apply Now</span>
+              </button>
+              <button className="button-custom type1 btn-tour" onClick={() => navigate('/tour')}>
+                <span className="btn-txt">School Tour</span>
+              </button>
             </div>
         </div>
       </div>
